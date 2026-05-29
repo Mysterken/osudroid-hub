@@ -15,9 +15,6 @@
 		scoreRanking?: number;
 		ppRanking?: number;
 	} = $props();
-
-	// temporary fix for 0-based ranking from API
-	const fixedGlobalRanking = $derived(globalRanking != null ? globalRanking + 1 : globalRanking);
 </script>
 
 {#snippet userRanking(title = '', value = 0)}
@@ -37,7 +34,7 @@
 		<table class="w-full text-sm max-w-100">
 			<tbody>
 				{#if source === 'api' || source === 'merged'}
-					{@render userRanking('Global Ranking', fixedGlobalRanking)}
+					{@render userRanking('Global Ranking', globalRanking)}
 					{@render userRanking('Country Ranking', countryRanking)}
 				{:else if source === 'scraper'}
 					{@render userRanking('Score Ranking', scoreRanking)}
