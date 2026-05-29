@@ -14,7 +14,7 @@ function calculateRawPP(pp: number | null, index: number): number {
  * Matches values for date, score, mods, combo, and accuracy.
  */
 function convertStringIntoPlayDetails(text: string) {
-	const dateMatch = text.match(/\d{4}-\d{2}-\d{2} (\d|:)+/);
+	const dateMatch = text.match(/\d{4}-\d{2}-\d{2} ([\d:])+/);
 	const scoreMatch = text.match(/(?<=score: )([\d,]+)/);
 	const longModsMatch = text.match(/(?<=mod: )([\w., ]+)/);
 	const comboMatch = text.match(/(?<=combo: )(\d+)/);
@@ -88,18 +88,28 @@ function convertAliasToLongModName(alias: string): string {
 }
 
 /**
- * Converts a beatmap title string into structured metadata.
+ * Parses a beatmap filename into its metadata components.
  *
- * Example input:
- * "EGOIST - Ame, Kimi o Tsurete(Speed up ver.) (xAsuna) [Pedri]"
+ * Extracts artist, title, mapper, and difficulty from a beatmap filename
+ * by parsing its standardized format: "Artist - Title (Mapper) [Difficulty]".
+ * Handles edge cases like underscores replacing spaces and .osu extensions.
  *
- * Expected output:
- * {
- *   songArtist: "EGOIST",
- *   songTitle: "Ame, Kimi o Tsurete(Speed up ver.)",
- *   mapper: "xAsuna",
- *   difficulty: "Pedri"
- * }
+ * @param title - The beatmap filename to parse
+ * @returns An object containing parsed metadata
+ * @returns {string} songArtist - The artist/creator of the song
+ * @returns {string} songTitle - The title of the song
+ * @returns {string} mapper - The username of the beatmap creator
+ * @returns {string} difficulty - The difficulty name/version of the beatmap
+ *
+ * @example
+ * // Standard format
+ * convertTitleToBeatmapMetadata("EGOIST - Ame, Kimi o Tsurete(Speed up ver.) (xAsuna) [Pedri]")
+ * // Returns: { songArtist: "EGOIST", songTitle: "Ame, Kimi o Tsurete(Speed up ver.)", mapper: "xAsuna", difficulty: "Pedri" }
+ *
+ * @example
+ * // With .osu extension
+ * convertTitleToBeatmapMetadata("Artist - Song (Mapper) [Diff].osu")
+ * // Returns: { songArtist: "Artist", songTitle: "Song", mapper: "Mapper", difficulty: "Diff" }
  */
 export function convertTitleToBeatmapMetadata(title: string): {
 	songArtist: string;
@@ -107,57 +117,50 @@ export function convertTitleToBeatmapMetadata(title: string): {
 	mapper: string;
 	difficulty: string;
 } {
-	// Remove .osu from the title at the end
-	title = title.replace(/\.osu$/, '');
-
-	// Helper function to escape regex special characters
-	function escapeRegExp(str: string): string {
-		return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	}
-
+	// Remove .osu file extension and trim whitespace
+	let current = title.replace(/\.osu$/, '').trim();
 	let songArtist = '';
-	const songArtistMatch = title.match(/^(.*?) - /);
-	if (songArtistMatch) {
-		songArtist = songArtistMatch[1];
-		// Remove the matched artist portion from the title
-		title = title.replace(new RegExp(escapeRegExp(songArtistMatch[0]), 'g'), '');
-	}
-
-	let difficulty = '';
-	const strippedTitleMatch = title.match(/.*?\) (?=\[)/);
-	if (strippedTitleMatch) {
-		const strippedTitle = strippedTitleMatch[0];
-		// Remove the strippedTitle from the title to get difficulty part
-		difficulty = title.replace(new RegExp(escapeRegExp(strippedTitle), 'g'), '');
-		title = title.replace(new RegExp(escapeRegExp(difficulty), 'g'), '');
-	}
-
-	let songTitle = '';
-	const songTitleMatch = title.match(/.*(?= \()/);
-	if (songTitleMatch) {
-		songTitle = songTitleMatch[0];
-		title = title.replace(new RegExp(escapeRegExp(songTitle), 'g'), '');
-	}
-
 	let mapper = '';
-	const mapperMatch = title.match(/(?<= \().*(?=\))/);
-	if (mapperMatch) {
-		mapper = mapperMatch[0];
+	let difficulty = '';
+
+	// Extract difficulty from the rightmost bracket pair: [Difficulty]
+	const diffMatch = current.match(/\[([^\]]*)][\s_]*$/);
+	if (diffMatch?.index !== undefined) {
+		difficulty = diffMatch[1];
+		// Remove the difficulty part from current string
+		current = current.substring(0, diffMatch.index).replace(/[\s_]+$/, '');
 	}
 
-	// Remove surrounding brackets from difficulty (e.g., "[Pedri]" -> "Pedri")
-	if (difficulty.startsWith('[') && difficulty.endsWith(']')) {
-		difficulty = difficulty.substring(1, difficulty.length - 1);
+	// Extract mapper from the rightmost parentheses: (Mapper)
+	const mapperMatch = current.match(/\(([^)]*)\)[\s_]*$/);
+	if (mapperMatch?.index !== undefined) {
+		mapper = mapperMatch[1];
+		// Remove the mapper part from current string
+		current = current.substring(0, mapperMatch.index).replace(/[\s_]+$/, '');
 	}
 
-	return {
-		songArtist,
-		songTitle,
-		mapper,
-		difficulty
-	};
+	// Extract artist and title by splitting on the separator: " - " or "_-_"
+	const separatorMatch = current.match(/([\s_]+-[\s_]+)/);
+	let songTitle: string;
+	if (separatorMatch?.index !== undefined) {
+		// Split on the separator found
+		songArtist = current.substring(0, separatorMatch.index).trim();
+		songTitle = current.substring(separatorMatch.index + separatorMatch[0].length).trim();
+
+		// replace underscores with spaces in all fields (e.g., "Artist_-_Title")
+		if (separatorMatch[0] === '_-_') {
+			songArtist = songArtist.replace(/_/g, ' ');
+			songTitle = songTitle.replace(/_/g, ' ');
+			mapper = mapper.replace(/_/g, ' ');
+			difficulty = difficulty.replace(/_/g, ' ');
+		}
+	} else {
+		// No separator found; treat entire remaining string as title
+		songTitle = current;
+	}
+
+	return { songArtist, songTitle, mapper, difficulty };
 }
-
 function formatLength(length?: number): string {
 	if (!length) return '0:00';
 
