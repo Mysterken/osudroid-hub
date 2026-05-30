@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { ApiPlayer, MergedPlayer, ScraperPlayer } from '$lib/models/player';
 	import ContentLayout from '$lib/components/layouts/ContentLayout.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
@@ -20,11 +19,13 @@
 	import type { PageProps } from './$types';
 	import { getUserField } from '$lib/utils/user';
 	import { playUtils } from '$lib/utils/playUtils';
+	import { page } from '$app/state';
 
 	let { data }: PageProps = $props();
 
 	let user = $derived<ApiPlayer | ScraperPlayer | MergedPlayer | null>(data?.user);
 
+	let userId = $derived(page.params.uid);
 	let globalRank = $derived(getUserField(data?.user, 'GlobalRank', 0)) as number;
 	let countryRank = $derived(getUserField(data?.user, 'CountryRank', 0)) as number;
 	let scoreRank = $derived(getUserField(data?.user, 'ScoreRank', 0)) as number;
@@ -138,44 +139,48 @@
 		return description;
 	}
 
-	onMount(async () => {
-		if (user) {
-			return;
+	$effect(() => {
+		async function loadUser() {
+			if (userId && user?.UserId?.toString() === userId) return;
+
+			isLoading = true;
+
+			const loadedUser = await fetchUser(userId ?? '').catch(() => null);
+
+			if (loadedUser?.Source === 'merged') {
+				({
+					GlobalRank: globalRank,
+					CountryRank: countryRank,
+					Registered: registered,
+					LastLogin: lastLogin,
+					ScoreRank: scoreRank,
+					PPRank: ppRank
+				} = loadedUser);
+			} else if (loadedUser?.Source === 'api') {
+				({
+					GlobalRank: globalRank,
+					CountryRank: countryRank,
+					Registered: registered,
+					LastLogin: lastLogin
+				} = loadedUser);
+			} else if (loadedUser?.Source === 'scraper') {
+				({ ScoreRank: scoreRank, PPRank: ppRank } = loadedUser);
+			}
+
+			user = loadedUser;
+
+			if (user?.Top50Plays) {
+				simulatedPP = playUtils.getSimulatedPerformancePoints(user.Top50Plays);
+
+				beatmaps.clear();
+				await fetchBeatmapsInRange(user.Top50Plays, 0, 5);
+				fetchBeatmapsInRange(user.Top50Plays, 5, 25).then((r) => void r);
+			}
+
+			isLoading = false;
 		}
 
-		const userId = window.location.pathname.split('/').pop() || '';
-		user = await fetchUser(userId);
-
-		if (user?.Source === 'merged') {
-			({
-				GlobalRank: globalRank,
-				CountryRank: countryRank,
-				Registered: registered,
-				LastLogin: lastLogin,
-				ScoreRank: scoreRank,
-				PPRank: ppRank
-			} = user);
-		} else if (user?.Source === 'api') {
-			({
-				GlobalRank: globalRank,
-				CountryRank: countryRank,
-				Registered: registered,
-				LastLogin: lastLogin
-			} = user);
-		} else if (user?.Source === 'scraper') {
-			({ ScoreRank: scoreRank, PPRank: ppRank } = user);
-		} else {
-			user = null;
-		}
-
-		if (user?.Top50Plays) {
-			simulatedPP = playUtils.getSimulatedPerformancePoints(user.Top50Plays);
-
-			await fetchBeatmapsInRange(user.Top50Plays, 0, 5);
-			fetchBeatmapsInRange(user.Top50Plays, 5, 25);
-		}
-
-		isLoading = false;
+		loadUser();
 	});
 
 	$effect(() => {
