@@ -26,6 +26,7 @@
 		playCount: number;
 		maxCombo: number;
 		maxComboPlay: BeatmapScore | null;
+		highestScore: BeatmapScore | null;
 		grades: Record<string, number>;
 		hits: { perfect: number; geki: number; good: number; katu: number; bad: number; miss: number };
 		mods: Record<string, { count: number; ppCount: number; totalPp: number; avgPp: number }>;
@@ -78,6 +79,7 @@
 			playCount: 0,
 			maxCombo: 0,
 			maxComboPlay: null,
+			highestScore: null,
 			grades: { XH: 0, SH: 0, X: 0, S: 0, A: 0, B: 0, C: 0, D: 0 },
 			hits: { perfect: 0, geki: 0, good: 0, katu: 0, bad: 0, miss: 0 },
 			mods: {},
@@ -104,7 +106,7 @@
 
 		private abortController: AbortController | null = null;
 		private previousWorkingStatus: 'scraping_profile' | 'scanning_firsts' | null = null;
-		private nextRequestTime = 0; // Timestamp for proactive rate limiting
+		private nextRequestTime = 0;
 
 		constructor(uid: number) {
 			this.uid = uid;
@@ -114,7 +116,9 @@
 		async loadSavedState() {
 			const saved = await loadFromDB(this.uid);
 			if (saved) {
-				this.stats = saved.stats || createEmptyStats();
+				this.stats = saved.stats
+					? { ...createEmptyStats(), ...(saved.stats as Partial<AnalyticsStats>) }
+					: createEmptyStats();
 				this.pagesFetched = saved.pagesFetched || 0;
 				this.hashesTotal = saved.hashesTotal || 0;
 				this.hashesChecked = saved.hashesChecked || 0;
@@ -184,7 +188,7 @@
 				if (res.status === 429) {
 					// We hit a hard limit. Schedule the next request after reset + 1s buffer.
 					this.nextRequestTime = Date.now() + (resetSeconds + 1) * 1000;
-					continue; // Loop again (enforceRateLimitDelay will handle the wait)
+					continue;
 				}
 
 				if (!res.ok) throw new Error(`API Error: ${res.status}`);
@@ -322,6 +326,12 @@
 				this.stats.maxComboPlay = play;
 			}
 
+			if (play.score !== undefined && play.score !== null) {
+				if (!this.stats.highestScore || play.score > (this.stats.highestScore.score || 0)) {
+					this.stats.highestScore = play;
+				}
+			}
+
 			this.stats.hits.perfect += play.perfect || 0;
 			this.stats.hits.geki += play.geki || 0;
 			this.stats.hits.good += play.good || 0;
@@ -350,8 +360,13 @@
 
 			if (play.filename) {
 				const { songArtist, mapper } = convertTitleToBeatmapMetadata(play.filename);
-				this.stats.artists[songArtist] = (this.stats.artists[songArtist] || 0) + 1;
-				this.stats.mappers[mapper] = (this.stats.mappers[mapper] || 0) + 1;
+
+				if (songArtist.trim()) {
+					this.stats.artists[songArtist] = (this.stats.artists[songArtist] || 0) + 1;
+				}
+				if (mapper.trim()) {
+					this.stats.mappers[mapper] = (this.stats.mappers[mapper] || 0) + 1;
+				}
 			}
 		}
 
