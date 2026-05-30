@@ -1,4 +1,5 @@
 import type { Play } from '$lib/models/play';
+import type { BeatmapScore } from '$lib/models/beatmapScore';
 
 /**
  * Function to calculate raw PP
@@ -161,6 +162,7 @@ export function convertTitleToBeatmapMetadata(title: string): {
 
 	return { songArtist, songTitle, mapper, difficulty };
 }
+
 function formatLength(length?: number): string {
 	if (!length) return '0:00';
 
@@ -179,6 +181,29 @@ function getSimulatedPerformancePoints(plays: Play[]): number {
 	}, 0);
 }
 
+/**
+ * Parses a mod array into a clean array of strings.
+ * Example: [{ acronym: 'HD' }, { acronym: 'DT', settings: { rateMultiplier: 1.5 } }]
+ * Returns: ['HD', 'DT', 'x1.5']
+ */
+export function parseModsArray(mods: BeatmapScore['mods']): string[] {
+	if (!mods || !Array.isArray(mods) || mods.length === 0) return ['NM'];
+
+	const parsedMods: string[] = [];
+	const multiplierMods: string[] = [];
+
+	for (const mod of mods) {
+		parsedMods.push(mod.acronym);
+
+		// Safely handle custom speed multipliers
+		if (mod.settings && typeof mod.settings.rateMultiplier === 'number') {
+			multiplierMods.push(`x${mod.settings.rateMultiplier}`);
+		}
+	}
+
+	return [...parsedMods, ...multiplierMods];
+}
+
 export const playUtils = {
 	calculateRawPP,
 	convertStringIntoPlayDetails,
@@ -186,5 +211,6 @@ export const playUtils = {
 	convertAliasToLongModName,
 	convertTitleToBeatmapMetadata,
 	formatLength,
-	getSimulatedPerformancePoints
+	getSimulatedPerformancePoints,
+	parseModsArray
 };
