@@ -10,25 +10,24 @@
 		MapIcon
 	} from 'lucide-svelte';
 	import { SegmentedControl } from '@skeletonlabs/skeleton-svelte';
-	import { playUtils } from '$lib/utils/playUtils.js';
+	import { convertTitleToBeatmapMetadata, playUtils } from '$lib/utils/playUtils';
 
 	let {
 		dialog = $bindable(),
 		beatmap,
-		play
+		play,
+		isLoading = false // 🌟 New prop to gracefully suspend rendering!
 	}: {
 		dialog?: HTMLDialogElement;
 		beatmap?: BeatmapExtended | null;
 		play?: Play | null;
+		isLoading?: boolean;
 	} = $props();
 
 	let audioEl = $state<HTMLAudioElement>();
 	let isPlaying = $state(false);
 
-	// Tab state to toggle between Beatmap info and Play info
 	let activeTab = $state<string | null>('play');
-
-	// Track current play/beatmap to detect changes
 	let currentPlayId = $state<string | null>(null);
 	let currentBeatmapId = $state<number | null>(null);
 
@@ -53,14 +52,32 @@
 			: null
 	);
 
-	// Determine if content has changed
 	let playId = $derived(play ? `${play.Filename}_${play.PlayedDate}` : null);
 	let beatmapId = $derived(beatmap?.id ?? null);
 	let contentChanged = $derived(playId !== currentPlayId || beatmapId !== currentBeatmapId);
 
+	let fallbackMeta = $derived(play ? convertTitleToBeatmapMetadata(play.Filename) : null);
+	let displayTitle = $derived(
+		beatmap?.beatmapset?.title || fallbackMeta?.songTitle || 'Unknown Title'
+	);
+	let displayArtist = $derived(
+		beatmap?.beatmapset?.artist || fallbackMeta?.songArtist || 'Unknown Artist'
+	);
+	let displayVersion = $derived(
+		beatmap?.version || fallbackMeta?.difficulty || 'Unknown Difficulty'
+	);
+
+	// 🌟 SAFELY check if it's a real map or a fallback map (id === 0)
+	let leaderboardLink = $derived(
+		beatmap && beatmap.id !== 0
+			? `/leaderboard/beatmapsets/${beatmap.beatmapset_id}/${beatmap.id}`
+			: play?.Hash
+				? `/leaderboard/beatmapsets/0/${play.Hash}`
+				: null
+	);
+
 	function playPreview() {
 		if (!audioEl) return;
-
 		if (isPlaying) {
 			audioEl.pause();
 			audioEl.currentTime = 0;
@@ -78,27 +95,21 @@
 		isPlaying = false;
 	}
 
-	// Handle dialog close (either by clicking outside or pressing ESC)
 	function handleClose() {
 		stopPreview();
 		document.body.style.overflow = '';
-		// Reset tracking
 		currentPlayId = null;
 		currentBeatmapId = null;
 	}
 
-	// Handle clicking the backdrop to close the modal
 	function handleBackdropClick(event: MouseEvent) {
-		if (event.target === dialog) {
-			dialog?.close();
-		}
+		if (event.target === dialog) dialog?.close();
 	}
 
 	$effect(() => {
 		if (dialog?.open) {
 			document.body.style.overflow = 'hidden';
 
-			// Update tracking when dialog opens with new content
 			if (contentChanged) {
 				currentPlayId = playId;
 				currentBeatmapId = beatmapId;
@@ -118,22 +129,33 @@
 {/if}
 
 {#snippet metadata()}
-	<h1 class="text-base font-bold leading-tight truncate" title={beatmap?.beatmapset?.title}>
-		{beatmap?.beatmapset?.title}
+	<h1 class="text-base font-bold leading-tight truncate" title={displayTitle}>
+		{displayTitle}
 	</h1>
-	<h2 class="text-sm text-gray-400 truncate">{beatmap?.beatmapset?.artist}</h2>
-	<h2 class="text-sm text-gray-300 mt-1">{beatmap?.version}</h2>
+	<h2 class="text-sm text-gray-400 truncate">{displayArtist}</h2>
+	<h2 class="text-sm text-gray-300 mt-1">{displayVersion}</h2>
 
-	<div class="flex gap-4 mt-2 text-xs">
-		<p>
-			Stars: <span class="text-white font-semibold">{beatmap?.difficulty_rating.toFixed(2)}</span>
-		</p>
-		<p>
-			Length: <span class="text-white font-semibold"
-				>{playUtils.formatLength(beatmap?.total_length)}</span
+	{#if beatmap !== undefined}
+		{#if beatmap && beatmap.id !== 0}
+			<div class="flex gap-4 mt-2 text-xs">
+				<p>
+					Stars: <span class="text-white font-semibold">{beatmap.difficulty_rating.toFixed(2)}</span
+					>
+				</p>
+				<p>
+					Length: <span class="text-white font-semibold"
+						>{playUtils.formatLength(beatmap.total_length)}</span
+					>
+				</p>
+			</div>
+		{:else}
+			<div
+				class="mt-2 text-[10px] text-yellow-500 font-semibold border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 rounded inline-block"
 			>
-		</p>
-	</div>
+				Unranked / Modified Map
+			</div>
+		{/if}
+	{/if}
 {/snippet}
 
 {#snippet dataTable(
@@ -158,28 +180,38 @@
 	onclose={handleClose}
 	onclick={handleBackdropClick}
 	class="modal rounded-xl shadow-2xl max-w-md w-[95%] backdrop:bg-black/70
-	top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+  top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
   "
 >
 	<div class="modal-content bg-[#1E1E1E] text-white p-5 tablet-sm:p-6 border border-[#3C3C3C]">
-		{#if beatmap === undefined && play === undefined}
-			<p class="text-sm text-gray-400 text-center py-4">Loading...</p>
+		{#if isLoading || (beatmap === undefined && play === undefined)}
+			<div class="flex flex-col items-center justify-center py-10 gap-3">
+				<p class="text-sm text-gray-400 font-medium animate-pulse">Loading map details...</p>
+			</div>
 		{:else}
 			{#key `${playId}_${beatmapId}`}
-				{#if beatmap}
+				{#if beatmap || play}
 					<div class="flex text-left">
 						<div class="shrink-0">
-							<img
-								src={beatmap.beatmapset?.covers.list}
-								alt="Beatmap Cover"
-								class="w-[100px] h-[100px] rounded-[5px]"
-								loading="lazy"
-							/>
+							{#if beatmap?.beatmapset?.covers?.list}
+								<img
+									src={beatmap.beatmapset.covers.list}
+									alt="Beatmap Cover"
+									class="w-[100px] h-[100px] rounded-[5px] object-cover"
+									loading="lazy"
+								/>
+							{:else}
+								<div
+									class="w-[100px] h-[100px] rounded-[5px] bg-[#2A2A2A] border border-[#3C3C3C] flex items-center justify-center"
+								>
+									<MapIcon size={32} class="text-gray-500" />
+								</div>
+							{/if}
 							<button
 								type="button"
-								class="bg-[#3C4345] transition-colors text-sm w-[100px] mt-2 p-1.5 flex justify-center rounded-md"
+								class="bg-[#3C4345] transition-colors text-sm w-[100px] mt-2 p-1.5 flex justify-center rounded-md disabled:opacity-50"
 								onclick={playPreview}
-								disabled={!beatmap.beatmapset?.preview_url}
+								disabled={!beatmap?.beatmapset?.preview_url}
 							>
 								{#if isPlaying}
 									<SquareIcon size={16} class="text-white" />
@@ -191,11 +223,6 @@
 						<div class="ml-4 overflow-hidden flex flex-col justify-center">
 							{@render metadata()}
 						</div>
-					</div>
-				{:else if play && beatmap === null}
-					<div class="text-center py-2">
-						<p class="text-sm text-red-400">Beatmap not found</p>
-						<p class="text-xs text-gray-400 mt-1">Showing play statistics only</p>
 					</div>
 				{/if}
 
@@ -309,10 +336,10 @@
 					{/if}
 				</div>
 
-				{#if beatmap}
-					<div class="flex flex-col gap-2 mt-6">
+				<div class="flex flex-col gap-2 mt-6">
+					{#if leaderboardLink}
 						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-						<a href={`/leaderboard/beatmapsets/${beatmap.beatmapset_id}/${beatmap.id}`}>
+						<a href={leaderboardLink}>
 							<button
 								type="button"
 								class="btn preset-filled-primary-500 text-white py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors w-full"
@@ -321,7 +348,9 @@
 								<TrophyIcon size={16} />
 							</button>
 						</a>
+					{/if}
 
+					{#if beatmap?.url}
 						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 						<a href={beatmap.url} target="_blank" rel="noopener noreferrer">
 							<button
@@ -332,8 +361,8 @@
 								<ExternalLinkIcon size={16} />
 							</button>
 						</a>
-					</div>
-				{/if}
+					{/if}
+				</div>
 			{/key}
 		{/if}
 	</div>
