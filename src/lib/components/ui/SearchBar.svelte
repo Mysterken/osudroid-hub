@@ -1,71 +1,92 @@
 <script lang="ts">
 	import { LoaderCircle, Search, TrophyIcon } from 'lucide-svelte';
-	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { toaster } from '$lib/utils/toaster';
 
 	let searchQuery = $state('');
 	let searchMode = $state<'user' | 'beatmap'>('user');
 	let hidden = $state(false);
-	let lastScrollY = 0;
+	let lastScrollY = $state(0);
 	let isSearching = $state(false);
 
-	// Smart parser to handle various osu! link formats
+	const SET_MAP_REGEX = /beatmapsets\/(\d+)(?:#(?:osu|taiko|catch|mania)\/(\d+))?/;
+	const MAP_REGEX = /\/(?:b|beatmaps)\/(\d+)/;
+	const OLD_MAP_REGEX = /[?&]b=(\d+)/;
+	const NUMBER_REGEX = /^\d+$/;
+	const HASH_REGEX = /^[a-fA-F0-9]{32}$/i;
+
+	// Smart parser to handle various osu! link formats + checksum hash
 	function parseBeatmapInput(input: string) {
 		let mapId: string | null = null;
 		let setId: string | null = null;
+		let hash: string | null = null;
 
-		// https://osu.ppy.sh/beatmapsets/1234#osu/5678 or https://osu.ppy.sh/beatmapsets/1234
-		const setMapRegex = /beatmapsets\/(\d+)(?:#(?:osu|taiko|catch|mania)\/(\d+))?/;
-		// https://osu.ppy.sh/b/5678 or https://osu.ppy.sh/beatmaps/5678
-		const mapRegex = /\/(?:b|beatmaps)\/(\d+)/;
-		// https://osu.ppy.sh/p/beatmap?b=5678
-		const oldMapRegex = /[?&]b=(\d+)/;
-		// Raw number (e.g. 5678)
-		const numberRegex = /^\d+$/;
+		const trimmed = input.trim();
 
-		if (setMapRegex.test(input)) {
-			const match = input.match(setMapRegex);
+		if (SET_MAP_REGEX.test(trimmed)) {
+			const match = trimmed.match(SET_MAP_REGEX);
 			setId = match![1];
 			mapId = match![2] || null;
-		} else if (mapRegex.test(input)) {
-			mapId = input.match(mapRegex)![1];
-		} else if (oldMapRegex.test(input)) {
-			mapId = input.match(oldMapRegex)![1];
-		} else if (numberRegex.test(input)) {
+		} else if (MAP_REGEX.test(trimmed)) {
+			mapId = trimmed.match(MAP_REGEX)![1];
+		} else if (OLD_MAP_REGEX.test(trimmed)) {
+			mapId = trimmed.match(OLD_MAP_REGEX)![1];
+		} else if (NUMBER_REGEX.test(trimmed)) {
 			// If just a number is pasted, assume it's a specific Beatmap ID (most common)
-			mapId = input;
+			mapId = trimmed;
+		} else if (HASH_REGEX.test(trimmed)) {
+			hash = trimmed.toLowerCase();
 		}
 
-		return { mapId, setId };
+		return { mapId, setId, hash };
 	}
 
 	async function resolveBeatmapUrl(input: string) {
-		const { mapId, setId } = parseBeatmapInput(input);
+		const { mapId, setId, hash } = parseBeatmapInput(input);
 
-		if (!mapId && !setId) {
-			throw new Error('Please enter a valid Beatmap ID or osu! link.');
+		if (!mapId && !setId && !hash) {
+			throw new Error('Please enter a valid Beatmap ID, beatmap hash, or osu! link.');
+		}
+
+		// Hash fallback
+		if (hash) {
+			try {
+				const res = await fetch(`/api/beatmaps/${hash}`);
+				if (res.ok) {
+					const data = await res.json();
+					return {
+						setId: String(data.beatmapset_id ?? 0),
+						mapId: String(data.id ?? hash)
+					};
+				}
+			} catch (err) {
+				console.warn('API unreachable, falling back to local hash routing.', err);
+			}
+
+			// Client-Side Safety Net: Route directly to Fallback Mode
+			return { setId: '0', mapId: hash };
 		}
 
 		let resolvedSetId = setId;
 		let resolvedMapId = mapId;
 
-		// If we only have the Map ID, fetch the map details to find its parent Set ID
+		// If we only have the Map ID, fetch map details to find its parent Set ID
 		if (mapId && !setId) {
 			const res = await fetch(`/api/beatmaps/${mapId}`);
 			if (!res.ok) throw new Error('Beatmap not found on the server.');
 			const data = await res.json();
-			resolvedSetId = data.beatmapset_id;
+			resolvedSetId = String(data.beatmapset_id);
 		}
 
-		// If we only have a Set ID (e.g., they pasted a set link without the #osu/id part)
+		// If we only have a Set ID, default to first available difficulty
 		if (setId && !mapId) {
 			const res = await fetch(`/api/beatmapset/${setId}`);
 			if (!res.ok) throw new Error('Beatmapset not found on the server.');
 			const data = await res.json();
+
 			if (data.beatmaps && data.beatmaps.length > 0) {
-				// Default to the first difficulty available
-				resolvedMapId = data.beatmaps[0].id;
+				resolvedMapId = String(data.beatmaps[0].id);
 			} else {
 				throw new Error('This beatmapset contains no maps.');
 			}
@@ -85,17 +106,20 @@
 					const response = await fetch(`/api/users/search/${username}`);
 
 					if (!response.ok) {
-						location.replace('/users/not-found');
+						// eslint-disable-next-line svelte/no-navigation-without-resolve
+						await goto('/users/not-found');
 						return;
 					}
 
 					const userData = await response.json();
 					sessionStorage.setItem(`user_${userData.UserId}`, JSON.stringify(userData));
-					location.replace(`/users/${userData.UserId}`);
+					// eslint-disable-next-line svelte/no-navigation-without-resolve
+					await goto(`/users/${userData.UserId}`);
 				} else if (searchMode === 'beatmap') {
 					// Handle the robust beatmap resolution
 					const { setId, mapId } = await resolveBeatmapUrl(query);
-					location.replace(`/leaderboard/beatmapsets/${setId}/${mapId}`);
+					// eslint-disable-next-line svelte/no-navigation-without-resolve
+					await goto(`/leaderboard/beatmapsets/${setId}/${mapId}`);
 				}
 			} catch (error) {
 				console.error('Search error:', error);
@@ -109,28 +133,25 @@
 		}
 	}
 
-	onMount(() => {
-		function onScroll() {
-			const currentScrollY = window.scrollY;
-			hidden = currentScrollY > lastScrollY && currentScrollY > 80;
-			lastScrollY = currentScrollY;
-		}
-
-		window.addEventListener('scroll', onScroll);
-		return () => window.removeEventListener('scroll', onScroll);
-	});
+	function handleScroll() {
+		const currentScrollY = window.scrollY;
+		hidden = currentScrollY > lastScrollY && currentScrollY > 80;
+		lastScrollY = currentScrollY;
+	}
 </script>
+
+<svelte:window onscroll={handleScroll} />
 
 <nav
 	class="
-  bg-[#2A2A2A]
-  sticky top-0 z-50
-  transition-transform duration-300 ease-in-out
-  {hidden ? '-translate-y-full' : 'translate-y-0'}
-  desktop-sm:translate-y-0
-  flex flex-col justify-center
-  p-2 phone-sm:p-2.5 tablet-sm:p-3.5 desktop-sm:px-6 desktop-sm:py-4
-  phone-sm:h16 tablet-sm:h-20 h-16"
+	bg-[#2A2A2A]
+	sticky top-0 z-50
+	transition-transform duration-300 ease-in-out
+	{hidden ? '-translate-y-full' : 'translate-y-0'}
+	desktop-sm:translate-y-0
+	flex flex-col justify-center
+	p-2 phone-sm:p-2.5 tablet-sm:p-3.5 desktop-sm:px-6 desktop-sm:py-4
+	phone-sm:h16 tablet-sm:h-20 h-16"
 >
 	<div class="max-w-300 mx-auto w-full flex items-center gap-2 tablet-sm:gap-4">
 		<a
@@ -155,7 +176,10 @@
 			<input
 				class="flex-1 bg-transparent text-white outline-none placeholder-gray-400 text-sm h-full w-full min-w-0"
 				type="search"
-				placeholder={searchMode === 'user' ? 'Search username...' : 'Paste beatmap ID or link...'}
+				aria-label="Search Input"
+				placeholder={searchMode === 'user'
+					? 'Search username...'
+					: 'Paste beatmap ID, hash, or link...'}
 				bind:value={searchQuery}
 				onkeydown={handleSearch}
 				disabled={isSearching}
@@ -164,6 +188,7 @@
 			<div class="relative flex items-center bg-[#3C3C3C] h-full shrink-0">
 				<select
 					bind:value={searchMode}
+					aria-label="Search Mode"
 					class="appearance-none bg-transparent text-gray-200 font-semibold text-xs tablet-sm:text-sm outline-none border-none pl-3 pr-6 py-2 cursor-pointer focus:text-white h-full w-26 tablet-sm:w-32"
 				>
 					<option value="user" class="bg-[#2A2A2A]">Player</option>

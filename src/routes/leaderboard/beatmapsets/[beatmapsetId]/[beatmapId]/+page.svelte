@@ -27,37 +27,47 @@
 		getRankColor,
 		getRankIcon
 	} from '$lib/utils/leaderboard';
-	import { playUtils } from '$lib/utils/playUtils';
+	import { playUtils, convertTitleToBeatmapMetadata } from '$lib/utils/playUtils';
 	import defaultAvatarImg from '$lib/assets/default/avatar.webp';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { getDifficultyColor } from '$lib/utils/colors';
 	import { fetchWithLocalCache } from '$lib/utils/fetchWithLocalCache';
+	import { formatExactTime, formatRelativeTime } from '$lib/utils/time';
 
 	const SCORES_PER_PAGE = 100;
+	const MD5_REGEX = /^[a-fA-F0-9]{32}$/i;
 
-	const beatmapsetId = $derived(parseInt(page.params.beatmapsetId ?? '', 10));
-	const beatmapId = $derived(parseInt(page.params.beatmapId ?? '', 10));
+	// Route Parameters
+	const beatmapsetId = $derived(parseInt(page.params.beatmapsetId ?? '0', 10));
+	const beatmapParam = $derived(String(page.params.beatmapId ?? '').trim());
+	const isHashBeatmap = $derived(MD5_REGEX.test(beatmapParam));
+	const numericBeatmapId = $derived(isHashBeatmap ? null : parseInt(beatmapParam, 10));
 
+	// Filter State
 	let currentPage = $state(parseInt(page.url.searchParams.get('page') ?? '0', 10));
 	let order = $state<'score' | 'pp'>(
 		(page.url.searchParams.get('order') as 'score' | 'pp') ?? 'score'
 	);
 
+	// Data State
 	let beatmapset = $state<Beatmapset | null>(null);
 	let beatmap = $state<BeatmapExtended | null>(null);
 	let scores = $state<BeatmapScore[]>([]);
+
 	let isBeatmapsetLoading = $state(true);
 	let isScoresLoading = $state(true);
 	let beatmapsetError = $state<string | null>(null);
 	let scoresError = $state<string | null>(null);
+
+	// UI State
 	let hoveredBeatmap = $state<(typeof availableBeatmaps)[0] | null>(null);
 	let displayBeatmap = $derived(hoveredBeatmap || beatmap);
-
 	let audioEl = $state<HTMLAudioElement>();
 	let isPlaying = $state(false);
 
 	let fetchController: AbortController | null = null;
 
+	// Computed Properties
 	let hasNextPage = $derived(scores.length === SCORES_PER_PAGE);
 	let totalPages = $derived(hasNextPage ? currentPage + 2 : currentPage + 1);
 	let totalCount = $derived(
@@ -105,7 +115,7 @@
 			.sort((a, b) => a.difficulty_rating - b.difficulty_rating) ?? []
 	);
 
-	// Helper functions
+	// Helper Functions
 	function getStatusLabel(status: number): string {
 		const statusMap: Record<number, string> = {
 			'-2': 'Graveyard',
@@ -132,37 +142,62 @@
 		return colorMap[status] || 'text-gray-400';
 	}
 
+	// --- Fetching Logic ---
 	async function fetchBeatmapset(): Promise<void> {
 		isBeatmapsetLoading = true;
+		isScoresLoading = true;
 		beatmapsetError = null;
+		scoresError = null;
 
-		// Clear previous state immediately to avoid showing stale info
 		beatmap = null;
 		beatmapset = null;
 		scores = [];
 
-		// Abort any in-flight score fetch to avoid races against the old checksum
 		if (fetchController) {
 			try {
 				fetchController.abort();
 			} catch {
-				// ignore
+				/* ignore */
 			}
 			fetchController = null;
 		}
 
 		try {
-			// cache beatmapset for a longer period in client localStorage
+			if (isHashBeatmap) {
+				// The API route already gracefully handles hashes and returns a mock beatmap if needed
+				const fallbackBeatmap = (await fetchWithLocalCache(
+					`/api/beatmaps/${beatmapParam}`,
+					undefined,
+					{
+						ttlMs: 60 * 60 * 1000
+					}
+				)) as BeatmapExtended;
+
+				// Wrap the standalone beatmap in a pseudo-beatmapset structure for the UI
+				beatmapset = {
+					id: 0,
+					title: fallbackBeatmap.beatmapset?.title ?? 'Unknown Title',
+					artist: fallbackBeatmap.beatmapset?.artist ?? 'Unknown Artist',
+					creator: fallbackBeatmap.beatmapset?.creator ?? 'Unknown Mapper',
+					status: -2,
+					covers: fallbackBeatmap.beatmapset?.covers ?? {},
+					preview_url: '',
+					beatmaps: [fallbackBeatmap]
+				} as Beatmapset;
+
+				beatmap = fallbackBeatmap;
+				beatmapsetError = null;
+				return;
+			}
+
+			// Standard Numeric ID flow
 			const resJson = await fetchWithLocalCache(`/api/beatmapset/${beatmapsetId}`, undefined, {
 				ttlMs: 60 * 60 * 1000
-			}); // 1 hour
+			});
 
-			// If we got here, update the beatmapset and derived beatmap
 			beatmapset = resJson as Beatmapset;
-
-			// Find the specific beatmap from the beatmapset
 			const found =
-				(beatmapset.beatmaps?.find((b) => b.id === beatmapId) as BeatmapExtended) ?? null;
+				(beatmapset.beatmaps?.find((b) => b.id === numericBeatmapId) as BeatmapExtended) ?? null;
 
 			if (!found) {
 				beatmap = null;
@@ -175,15 +210,16 @@
 		} catch (err) {
 			beatmap = null;
 			beatmapset = null;
-
-			if (err instanceof Error && /404/.test(err.message)) {
-				beatmapsetError = 'Beatmapset not found.';
-			} else {
-				beatmapsetError = 'An error occurred while loading beatmapset info.';
-				console.error('Error fetching beatmapset:', err);
-			}
+			beatmapsetError =
+				err instanceof Error && /404/.test(err.message)
+					? 'Beatmapset not found.'
+					: 'An error occurred while loading beatmapset info.';
+			console.error('Error fetching beatmapset:', err);
 		} finally {
 			isBeatmapsetLoading = false;
+			if (!beatmap?.checksum) {
+				isScoresLoading = false;
+			}
 		}
 	}
 
@@ -192,16 +228,40 @@
 			isScoresLoading = false;
 			return;
 		}
+
 		if (fetchController) fetchController.abort();
 		fetchController = new AbortController();
 		const signal = fetchController.signal;
 		isScoresLoading = true;
 		scoresError = null;
+
 		try {
 			const url = `/api/leaderboard/beatmaps/${beatmap.checksum}?order=${order}&page=${currentPage}`;
 			const data = await fetchWithLocalCache(url, { signal }, { ttlMs: 5 * 60 * 1000 });
+
 			if (!signal.aborted) {
 				scores = Array.isArray(data) ? data : [];
+
+				// 🌟 MAGIC METADATA RECONSTRUCTION
+				// If this is a fallback map, reconstruct the Title, Artist, and Difficulty
+				// by parsing the filename attached to the #1 score!
+				if (isHashBeatmap && scores.length > 0 && scores[0].filename) {
+					const meta = convertTitleToBeatmapMetadata(scores[0].filename);
+					if (beatmapset) {
+						beatmapset = {
+							...beatmapset,
+							title: meta.songTitle || beatmapset.title,
+							artist: meta.songArtist || beatmapset.artist,
+							creator: meta.mapper || beatmapset.creator
+						} as Beatmapset;
+					}
+					if (beatmap) {
+						beatmap = {
+							...beatmap,
+							version: meta.difficulty || beatmap.version
+						} as BeatmapExtended;
+					}
+				}
 			}
 		} catch (err) {
 			if (err instanceof Error && err.name === 'AbortError') return;
@@ -217,7 +277,7 @@
 		if (currentPage !== 0) params.set('page', String(currentPage));
 		const qs = params.toString();
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		goto(qs ? `?${qs}` : resolve(`/leaderboard/beatmapsets/${beatmapsetId}/${beatmapId}`), {
+		goto(qs ? `?${qs}` : resolve(`/leaderboard/beatmapsets/${beatmapsetId}/${beatmapParam}`), {
 			keepFocus: true,
 			noScroll: true,
 			replaceState: true
@@ -239,7 +299,7 @@
 	}
 
 	function handleDifficultyChange(newBeatmapId: number): void {
-		if (newBeatmapId === beatmapId) return;
+		if (newBeatmapId === numericBeatmapId) return;
 		stopPreview();
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		goto(`/leaderboard/beatmapsets/${beatmapsetId}/${newBeatmapId}`, { invalidateAll: true });
@@ -247,7 +307,6 @@
 
 	function playPreview(): void {
 		if (!audioEl) return;
-
 		if (isPlaying) {
 			audioEl.pause();
 			audioEl.currentTime = 0;
@@ -265,86 +324,49 @@
 		isPlaying = false;
 	}
 
-	function formatExactTime(timestamp: number): string {
-		return new Date(timestamp * 1000).toLocaleString();
-	}
-
-	function formatRelativeTime(timestamp: number): string {
-		const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-		const daysDifference = Math.round((timestamp * 1000 - Date.now()) / (1000 * 60 * 60 * 24));
-
-		if (Math.abs(daysDifference) < 30) return rtf.format(daysDifference, 'day');
-
-		const monthsDifference = Math.round(daysDifference / 30);
-		if (Math.abs(monthsDifference) < 12) return rtf.format(monthsDifference, 'month');
-
-		return rtf.format(Math.round(monthsDifference / 12), 'year');
-	}
-
-	function parseMods(
-		mods: Array<{ acronym: string; settings?: Record<string, unknown> }>
-	): string[] {
-		if (!mods || !Array.isArray(mods) || mods.length === 0) return ['NM'];
-
-		const parsedMods: string[] = [];
-		const multiplierMods: string[] = [];
-
-		for (const mod of mods) {
-			parsedMods.push(mod.acronym);
-
-			// Store multiplier mods separately
-			if (mod.settings && typeof mod.settings.rateMultiplier === 'number') {
-				multiplierMods.push(`x${mod.settings.rateMultiplier}`);
-			}
-		}
-
-		// Put multiplier mods at the end
-		return [...parsedMods, ...multiplierMods];
-	}
-
-	function formatAccuracy(accuracy: number): string {
-		return (accuracy * 100).toFixed(2) + '%';
-	}
-
-	function handleAvatarError(event: Event): void {
-		(event.target as HTMLImageElement).src = defaultAvatarImg;
-	}
-
+	// --- Synchronization Effect ---
 	$effect(() => {
 		const currentSetId = beatmapsetId;
-		const currentMapId = beatmapId;
+		const currentMapParam = beatmapParam;
+		const currentNumericMapId = numericBeatmapId;
 
-		if (currentSetId && currentMapId) {
+		if (!Number.isNaN(currentSetId) && currentMapParam) {
 			untrack(() => {
 				stopPreview();
 
-				// Keep pagination and sorting in sync with the URL when switching difficulties
 				currentPage = parseInt(page.url.searchParams.get('page') ?? '0', 10);
 				order = (page.url.searchParams.get('order') as 'score' | 'pp') ?? 'score';
 
-				// Just swap the active difficulty and fetch the new scores.
-				if (beatmapset?.beatmaps?.some((b) => b.id === currentMapId)) {
-					beatmap =
-						(beatmapset.beatmaps.find((b) => b.id === currentMapId) as BeatmapExtended) ?? null;
+				if (isHashBeatmap) {
+					fetchBeatmapset()
+						.then(() => {
+							if (beatmap?.checksum) fetchScores();
+						})
+						.catch(() => {});
+					return;
+				}
 
+				// Standard Difficulty Swap
+				if (
+					currentNumericMapId !== null &&
+					beatmapset?.beatmaps?.some((b) => b.id === currentNumericMapId)
+				) {
+					beatmap =
+						(beatmapset.beatmaps.find((b) => b.id === currentNumericMapId) as BeatmapExtended) ??
+						null;
 					if (beatmap) {
 						beatmapsetError = null;
 						fetchScores();
 					} else {
 						beatmapsetError = 'Beatmap not found in beatmapset.';
+						isScoresLoading = false;
 					}
 				} else {
-					// Initial load, or navigating to an entirely new map
 					fetchBeatmapset()
 						.then(() => {
-							// Only fetch scores if we successfully loaded a beatmap and it has a checksum
-							if (beatmap?.checksum) {
-								fetchScores();
-							}
+							if (beatmap?.checksum) fetchScores();
 						})
-						.catch(() => {
-							// errors already handled inside fetchBeatmapset; nothing to do here
-						});
+						.catch(() => {});
 				}
 			});
 		}
@@ -365,7 +387,6 @@
 
 <ContentLayout>
 	<div class="flex flex-col gap-6 py-6">
-		<!-- Hero Section -->
 		{#if isBeatmapsetLoading}
 			<div class="relative rounded-xl overflow-hidden bg-[#2A2A2A] animate-pulse">
 				<div class="h-48 tablet-sm:h-64"></div>
@@ -409,7 +430,7 @@
 									onclick={() => handleDifficultyChange(diff.id)}
 									aria-label={diff.version}
 									class="size-[22px] shrink-0 rounded-full border-[2.5px] transition-all duration-200 {diff.id ===
-									beatmapId
+									numericBeatmapId
 										? 'border-white scale-110'
 										: 'border-transparent opacity-60 hover:opacity-100 hover:scale-110'}"
 									style="background-color: {getDifficultyColor(diff.difficulty_rating)};"
@@ -491,11 +512,9 @@
 										class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors"
 									>
 										{#if isPlaying}
-											<SquareIcon size={16} />
-											Stop Preview
+											<SquareIcon size={16} /> Stop Preview
 										{:else}
-											<PlayIcon size={16} />
-											Play Preview
+											<PlayIcon size={16} /> Play Preview
 										{/if}
 									</button>
 								{/if}
@@ -506,8 +525,7 @@
 											type="button"
 											class="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-sm font-semibold transition-colors"
 										>
-											View on osu!
-											<ExternalLinkIcon size={16} />
+											View on osu! <ExternalLinkIcon size={16} />
 										</button>
 									</a>
 								{/if}
@@ -557,7 +575,7 @@
 			{#snippet row(score, i)}
 				{@const rank = currentPage * SCORES_PER_PAGE + i + 1}
 				{@const rankColor = getRankColor(rank)}
-				{@const mods = parseMods(score.mods)}
+				{@const mods = playUtils.parseModsArray(score.mods)}
 				{@const isMaxCombo = beatmap?.max_combo && score.combo >= beatmap.max_combo}
 				<tr
 					class="border-b border-gray-800 hover:bg-[#333333] transition-colors whitespace-nowrap text-sm"
@@ -584,7 +602,7 @@
 								src={getPlayerAvatarUrl(score.uid)}
 								alt={score.username}
 								class="size-6 rounded-full bg-gray-700"
-								onerror={handleAvatarError}
+								onerror={(e) => ((e.target as HTMLImageElement).src = defaultAvatarImg)}
 							/>
 							<span class="text-white font-medium hover:underline">{score.username}</span>
 						</a>
@@ -595,21 +613,22 @@
 					</td>
 
 					<td class="px-3 py-3 text-right">
-						<span class="text-gray-200">{formatAccuracy(score.accuracy)}</span>
+						<span class="text-gray-200">{(score.accuracy * 100).toFixed(2)}%</span>
 					</td>
 
 					<td class="px-3 py-3 text-right">
 						<span
 							class={isMaxCombo ? 'font-bold' : 'text-gray-200'}
 							style={isMaxCombo ? 'color: hsl(90, 100%, 70%)' : ''}
-							>{formatNumber(score.combo)}x</span
 						>
+							{formatNumber(score.combo)}x
+						</span>
 					</td>
 
 					<td class="px-3 py-3 text-right">
-						<span class="font-bold {score.miss > 0 ? 'text-red-400' : 'text-gray-500'}"
-							>{formatNumber(score.miss ?? 0)}</span
-						>
+						<span class="font-bold {score.miss > 0 ? 'text-red-400' : 'text-gray-500'}">
+							{formatNumber(score.miss ?? 0)}
+						</span>
 					</td>
 
 					<td class="px-3 py-3 text-right">
@@ -636,7 +655,7 @@
 				{@const rank = currentPage * SCORES_PER_PAGE + i + 1}
 				{@const rankColor = getRankColor(rank)}
 				{@const RankIcon = getRankIcon(rank)}
-				{@const mods = parseMods(score.mods)}
+				{@const mods = playUtils.parseModsArray(score.mods)}
 				{@const isMaxCombo = beatmap?.max_combo && score.combo >= beatmap.max_combo}
 				<div class="border-b border-gray-800 p-4 hover:bg-[#333333] transition-colors">
 					<div class="flex items-center gap-3">
@@ -658,13 +677,13 @@
 								src={getPlayerAvatarUrl(score.uid)}
 								alt={score.username}
 								class="size-8 rounded-full bg-gray-700 shrink-0"
-								onerror={handleAvatarError}
+								onerror={(e) => ((e.target as HTMLImageElement).src = defaultAvatarImg)}
 							/>
 							<span class="text-white font-medium text-sm truncate">{score.username}</span>
 						</a>
 						<div class="text-right shrink-0">
 							<p class="text-white text-sm font-semibold">{formatNumber(score.score)}</p>
-							<p class="text-gray-400 text-xs">{formatAccuracy(score.accuracy)}</p>
+							<p class="text-gray-400 text-xs">{(score.accuracy * 100).toFixed(2)}%</p>
 						</div>
 					</div>
 					<div class="flex items-center justify-between mt-2 pl-[3.25rem] gap-2 flex-wrap">
@@ -676,8 +695,10 @@
 						<div class="flex items-center gap-3 text-xs text-gray-400 ml-auto">
 							<span
 								class={isMaxCombo ? 'font-bold' : ''}
-								style={isMaxCombo ? 'color: hsl(90, 100%, 70%)' : ''}>{score.combo}x combo</span
+								style={isMaxCombo ? 'color: hsl(90, 100%, 70%)' : ''}
 							>
+								{score.combo}x combo
+							</span>
 							<span class="text-red-400">{score.miss} miss</span>
 							<span class="text-white font-semibold">
 								{Math.round(score.pp)}<span class="text-gray-400 font-normal">pp</span>
