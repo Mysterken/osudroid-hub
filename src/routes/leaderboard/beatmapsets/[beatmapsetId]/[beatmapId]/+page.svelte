@@ -142,7 +142,7 @@
 		return colorMap[status] || 'text-gray-400';
 	}
 
-	// --- Fetching Logic ---
+	// Fetching Logic
 	async function fetchBeatmapset(): Promise<void> {
 		isBeatmapsetLoading = true;
 		isScoresLoading = true;
@@ -173,20 +173,47 @@
 					}
 				)) as BeatmapExtended;
 
-				// Wrap the standalone beatmap in a pseudo-beatmapset structure for the UI
-				beatmapset = {
-					id: 0,
-					title: fallbackBeatmap.beatmapset?.title ?? 'Unknown Title',
-					artist: fallbackBeatmap.beatmapset?.artist ?? 'Unknown Artist',
-					creator: fallbackBeatmap.beatmapset?.creator ?? 'Unknown Mapper',
-					status: -2,
-					covers: fallbackBeatmap.beatmapset?.covers ?? {},
-					preview_url: '',
-					beatmaps: [fallbackBeatmap]
-				} as Beatmapset;
-
 				beatmap = fallbackBeatmap;
-				beatmapsetError = null;
+
+				// If we have a real beatmapset with a valid ID, fetch it for full content
+				if (
+					fallbackBeatmap.beatmapset_id &&
+					fallbackBeatmap.beatmapset_id > 0 &&
+					fallbackBeatmap.id
+				) {
+					const resJson = await fetchWithLocalCache(
+						`/api/beatmapset/${fallbackBeatmap.beatmapset_id}`,
+						undefined,
+						{
+							ttlMs: 60 * 60 * 1000
+						}
+					);
+					beatmapset = resJson as Beatmapset;
+					beatmapsetError = null;
+
+					// Replace URL with numeric IDs instead of hash
+					untrack(() => {
+						goto(
+							resolve(
+								`/leaderboard/beatmapsets/${fallbackBeatmap.beatmapset_id}/${fallbackBeatmap.id}`
+							),
+							{ replaceState: true }
+						);
+					});
+				} else {
+					// Wrap the standalone beatmap in a pseudo-beatmapset structure for the UI
+					beatmapset = {
+						id: 0,
+						title: fallbackBeatmap.beatmapset?.title ?? 'Unknown Title',
+						artist: fallbackBeatmap.beatmapset?.artist ?? 'Unknown Artist',
+						creator: fallbackBeatmap.beatmapset?.creator ?? 'Unknown Mapper',
+						status: -2,
+						covers: fallbackBeatmap.beatmapset?.covers ?? {},
+						preview_url: fallbackBeatmap.beatmapset?.preview_url ?? '',
+						beatmaps: [fallbackBeatmap]
+					} as Beatmapset;
+					beatmapsetError = null;
+				}
 				return;
 			}
 
@@ -242,10 +269,8 @@
 			if (!signal.aborted) {
 				scores = Array.isArray(data) ? data : [];
 
-				// 🌟 MAGIC METADATA RECONSTRUCTION
 				// If this is a fallback map, reconstruct the Title, Artist, and Difficulty
-				// by parsing the filename attached to the #1 score!
-				if (isHashBeatmap && scores.length > 0 && scores[0].filename) {
+				if (isHashBeatmap && scores.length > 0 && scores[0].filename && !beatmapset?.id) {
 					const meta = convertTitleToBeatmapMetadata(scores[0].filename);
 					if (beatmapset) {
 						beatmapset = {
@@ -301,8 +326,7 @@
 	function handleDifficultyChange(newBeatmapId: number): void {
 		if (newBeatmapId === numericBeatmapId) return;
 		stopPreview();
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		goto(`/leaderboard/beatmapsets/${beatmapsetId}/${newBeatmapId}`, { invalidateAll: true });
+		goto(resolve(`/leaderboard/beatmapsets/${beatmapsetId}/${newBeatmapId}`), { invalidateAll: true });
 	}
 
 	function playPreview(): void {
@@ -324,7 +348,7 @@
 		isPlaying = false;
 	}
 
-	// --- Synchronization Effect ---
+	// Synchronization Effect
 	$effect(() => {
 		const currentSetId = beatmapsetId;
 		const currentMapParam = beatmapParam;
