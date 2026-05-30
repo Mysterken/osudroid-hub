@@ -30,7 +30,8 @@
 		grades: Record<string, number>;
 		hits: { perfect: number; geki: number; good: number; katu: number; bad: number; miss: number };
 		mods: Record<string, { count: number; ppCount: number; totalPp: number; avgPp: number }>;
-		timeline: Record<string, number>;
+		timeline: Record<string, number>; // Play count per month
+		ppTimeline: { date: number; cumulativePp: number }[]; // 🌟 NEW: Cumulative PP over time
 		mappers: Record<string, number>;
 		artists: Record<string, number>;
 		firstPlaces: FirstPlace[];
@@ -43,6 +44,7 @@
 		hashesTotal: number;
 		hashesChecked: number;
 		status: 'idle' | 'scraping_profile' | 'scanning_firsts' | 'rate_limited' | 'done' | 'failed';
+		lastUpdated: number;
 	};
 
 	// Database helpers
@@ -84,6 +86,7 @@
 			hits: { perfect: 0, geki: 0, good: 0, katu: 0, bad: 0, miss: 0 },
 			mods: {},
 			timeline: {},
+			ppTimeline: [],
 			mappers: {},
 			artists: {},
 			firstPlaces: [],
@@ -102,11 +105,14 @@
 		hashesTotal = $state(0);
 		hashesChecked = $state(0);
 		rateLimitCountdown = $state(0);
+		lastUpdated = $state(0);
 		stats = $state<AnalyticsStats>(createEmptyStats());
 
 		private abortController: AbortController | null = null;
 		private previousWorkingStatus: 'scraping_profile' | 'scanning_firsts' | null = null;
 		private nextRequestTime = 0;
+
+		private rawPpPlays: { date: number; pp: number }[] = [];
 
 		constructor(uid: number) {
 			this.uid = uid;
@@ -122,6 +128,7 @@
 				this.pagesFetched = saved.pagesFetched || 0;
 				this.hashesTotal = saved.hashesTotal || 0;
 				this.hashesChecked = saved.hashesChecked || 0;
+				this.lastUpdated = saved.lastUpdated || 0;
 				this.status = ['scraping_profile', 'scanning_firsts', 'rate_limited'].includes(saved.status)
 					? 'idle'
 					: saved.status;
@@ -135,6 +142,7 @@
 			this.hashesChecked = 0;
 			this.rateLimitCountdown = 0;
 			this.nextRequestTime = 0;
+			this.rawPpPlays = [];
 			this.error = null;
 			this.status = 'idle';
 			this.saveState();
@@ -257,6 +265,27 @@
 					page++;
 				}
 
+				// PP Timeline
+				if (this.rawPpPlays.length > 0) {
+					// Sort chronologically
+					this.rawPpPlays.sort((a, b) => a.date - b.date);
+
+					let currentTotalPp = 0;
+					this.stats.ppTimeline = [];
+
+					// Accumulate the PP
+					for (const play of this.rawPpPlays) {
+						currentTotalPp += play.pp;
+						this.stats.ppTimeline.push({
+							date: play.date,
+							cumulativePp: currentTotalPp
+						});
+					}
+
+					// Clear the raw array to save memory
+					this.rawPpPlays = [];
+				}
+
 				// Phase 2: Verify #1 scores
 				this.status = 'scanning_firsts';
 				const existingHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.hash));
@@ -351,6 +380,11 @@
 				this.stats.mods[modKey].totalPp += play.pp;
 				this.stats.mods[modKey].avgPp =
 					this.stats.mods[modKey].totalPp / this.stats.mods[modKey].ppCount;
+
+				// Stash the PP for timeline processing later
+				if (play.date) {
+					this.rawPpPlays.push({ date: play.date, pp: play.pp });
+				}
 			}
 
 			if (play.date) {
@@ -377,7 +411,8 @@
 					pagesFetched: this.pagesFetched,
 					hashesTotal: this.hashesTotal,
 					hashesChecked: this.hashesChecked,
-					status: this.status
+					status: this.status,
+					lastUpdated: Math.floor(Date.now() / 1000)
 				});
 			});
 		}
