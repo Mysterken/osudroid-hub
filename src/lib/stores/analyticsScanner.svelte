@@ -9,6 +9,8 @@
 	const DB_NAME = 'osudroid_hub_analytics';
 	const STORE_NAME = 'player_profiles';
 
+	export type ScanMode = 'quick' | 'deep';
+
 	export type FirstPlace = {
 		hash: string;
 		score: number;
@@ -30,8 +32,8 @@
 		grades: Record<string, number>;
 		hits: { perfect: number; geki: number; good: number; katu: number; bad: number; miss: number };
 		mods: Record<string, { count: number; ppCount: number; totalPp: number; avgPp: number }>;
-		timeline: Record<string, number>; // Play count per month
-		ppTimeline: { date: number; cumulativePp: number }[]; // 🌟 NEW: Cumulative PP over time
+		timeline: Record<string, number>;
+		ppTimeline: { date: number; cumulativePp: number }[];
 		mappers: Record<string, number>;
 		artists: Record<string, number>;
 		firstPlaces: FirstPlace[];
@@ -39,6 +41,7 @@
 	};
 
 	export type SavedAnalyticsState = {
+		mode: ScanMode;
 		stats: AnalyticsStats;
 		pagesFetched: number;
 		hashesTotal: number;
@@ -107,6 +110,7 @@
 		rateLimitCountdown = $state(0);
 		lastUpdated = $state(0);
 		stats = $state<AnalyticsStats>(createEmptyStats());
+		mode = $state<ScanMode>('deep');
 
 		private abortController: AbortController | null = null;
 		private previousWorkingStatus: 'scraping_profile' | 'scanning_firsts' | null = null;
@@ -121,7 +125,9 @@
 
 		async loadSavedState() {
 			const saved = await loadFromDB(this.uid);
+
 			if (saved) {
+				this.mode = saved.mode || 'deep';
 				this.stats = saved.stats
 					? { ...createEmptyStats(), ...(saved.stats as Partial<AnalyticsStats>) }
 					: createEmptyStats();
@@ -161,6 +167,7 @@
 		 */
 		private async enforceRateLimitDelay(signal: AbortSignal) {
 			const now = Date.now();
+
 			if (now < this.nextRequestTime) {
 				this.previousWorkingStatus = this.status as 'scraping_profile' | 'scanning_firsts';
 				this.status = 'rate_limited';
@@ -215,13 +222,14 @@
 			}
 		}
 
-		async start(forceRestart = false) {
+		async start(forceRestart = false, mode: ScanMode = this.mode) {
 			if (['scraping_profile', 'scanning_firsts', 'rate_limited'].includes(this.status)) return;
 
 			if (forceRestart || this.status === 'done' || this.status === 'failed') {
 				this.reset();
 			}
 
+			this.mode = mode;
 			this.error = null;
 			this.abortController = new AbortController();
 			const signal = this.abortController.signal;
@@ -235,7 +243,7 @@
 				let page = this.pagesFetched;
 
 				while (true) {
-					if (signal.aborted) throw new Error('Stopped by user');
+					if (signal.aborted) return;
 
 					const res = await this.fetchWithRateLimit(
 						`${API_BASE_URL}/score-search?uid=${this.uid}&page=${page}`,
@@ -286,57 +294,70 @@
 					this.rawPpPlays = [];
 				}
 
-				// Phase 2: Verify #1 scores
-				this.status = 'scanning_firsts';
-				const existingHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.hash));
-				const hashesToCheck = Array.from(potentialFirstPlaces).filter(
-					(h) => !existingHashes.has(h)
-				);
+				// Phase 2: Verify #1 scores (deep scan only)
+				if (this.mode === 'deep') {
+					this.status = 'scanning_firsts';
+					const existingHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.hash));
+					const hashesToCheck = Array.from(potentialFirstPlaces).filter(
+						(h) => !existingHashes.has(h)
+					);
 
-				this.hashesTotal = this.stats.firstPlaces.length + hashesToCheck.length;
-				this.hashesChecked = this.stats.firstPlaces.length;
-				this.saveState();
+					this.hashesTotal = this.stats.firstPlaces.length + hashesToCheck.length;
+					this.hashesChecked = this.stats.firstPlaces.length;
+					this.saveState();
 
-				for (const hash of hashesToCheck) {
-					if (signal.aborted) throw new Error('Stopped by user');
-					try {
-						const res = await this.fetchWithRateLimit(
-							`${API_BASE_URL}/score-search?hash=${hash}&order=score&page=0`,
-							signal
-						);
-						const leaderboard: BeatmapScore[] = await res.json();
-						const top = Array.isArray(leaderboard) ? leaderboard[0] : null;
+					for (const hash of hashesToCheck) {
+						if (signal.aborted) return;
 
-						if (top && String(top.uid) === String(this.uid) && !existingHashes.has(hash)) {
-							const { songTitle, songArtist, mapper, difficulty } = convertTitleToBeatmapMetadata(
-								top.filename || ''
+						try {
+							const res = await this.fetchWithRateLimit(
+								`${API_BASE_URL}/score-search?hash=${hash}&order=score&page=0`,
+								signal
 							);
+							const leaderboard: BeatmapScore[] = await res.json();
+							const top = Array.isArray(leaderboard) ? leaderboard[0] : null;
 
-							this.stats.firstPlaces.push({
-								hash,
-								score: top.score,
-								pp: top.pp,
-								accuracy: top.accuracy || 0,
-								date: top.date,
-								mods: playUtils.parseModsArray(top.mods).join('') || 'NM',
-								title: songTitle,
-								artist: songArtist,
-								mapper: mapper,
-								difficulty: difficulty
-							});
-							existingHashes.add(hash);
+							if (top && String(top.uid) === String(this.uid) && !existingHashes.has(hash)) {
+								const { songTitle, songArtist, mapper, difficulty } = convertTitleToBeatmapMetadata(
+									top.filename || ''
+								);
+
+								this.stats.firstPlaces.push({
+									hash,
+									score: top.score,
+									pp: top.pp,
+									accuracy: top.accuracy || 0,
+									date: top.date,
+									mods: playUtils.parseModsArray(top.mods).join('') || 'NM',
+									title: songTitle,
+									artist: songArtist,
+									mapper: mapper,
+									difficulty: difficulty
+								});
+								existingHashes.add(hash);
+							}
+						} catch (err) {
+							console.error(`Failed to check hash ${hash}`, err);
 						}
-					} catch (err) {
-						console.error(`Failed to check hash ${hash}`, err);
+						this.hashesChecked++;
+						this.saveState();
 					}
-					this.hashesChecked++;
+				} else {
+					// Quick scan: do not verify per-hash leaderboard ranks
+					this.hashesTotal = 0;
+					this.hashesChecked = 0;
 					this.saveState();
 				}
 
+				if (signal.aborted) return;
 				this.status = 'done';
 			} catch (err: unknown) {
-				this.status = err instanceof Error && err.message === 'Stopped by user' ? 'idle' : 'failed';
-				this.error = err instanceof Error ? err.message : 'Unknown error';
+				if (err instanceof Error && err.name === 'AbortError') {
+					this.status = 'idle';
+				} else {
+					this.status = 'failed';
+					this.error = err instanceof Error ? err.message : 'Unknown error';
+				}
 			} finally {
 				this.rateLimitCountdown = 0;
 				this.saveState();
@@ -407,6 +428,7 @@
 		private saveState() {
 			untrack(() => {
 				saveToDB(this.uid, {
+					mode: this.mode,
 					stats: $state.snapshot(this.stats),
 					pagesFetched: this.pagesFetched,
 					hashesTotal: this.hashesTotal,
