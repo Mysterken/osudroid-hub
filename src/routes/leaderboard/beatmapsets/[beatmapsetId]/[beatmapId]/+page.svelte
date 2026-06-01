@@ -326,7 +326,9 @@
 	function handleDifficultyChange(newBeatmapId: number): void {
 		if (newBeatmapId === numericBeatmapId) return;
 		stopPreview();
-		goto(resolve(`/leaderboard/beatmapsets/${beatmapsetId}/${newBeatmapId}`), { invalidateAll: true });
+		goto(resolve(`/leaderboard/beatmapsets/${beatmapsetId}/${newBeatmapId}`), {
+			invalidateAll: true
+		});
 	}
 
 	function playPreview(): void {
