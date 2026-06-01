@@ -21,7 +21,6 @@
 	import { playUtils } from '$lib/utils/playUtils';
 	import AnalyticsDashboard from '$lib/components/users/analytics/AnalyticsDashboard.svelte';
 	import { page } from '$app/state';
-	import { untrack } from 'svelte';
 	import { PlayerAnalyticsScanner } from '$lib/stores/analyticsScanner.svelte';
 
 	let { data }: PageProps = $props();
@@ -49,7 +48,7 @@
 	let selectedPlay: Play | null = $state(null);
 	let dialog: HTMLDialogElement | undefined = $state();
 
-	let scanner = $state(new PlayerAnalyticsScanner(untrack(() => data?.user?.UserId ?? 0)));
+	let scanner: PlayerAnalyticsScanner | null = $state(null);
 
 	async function fetchUser(
 		userId: string
@@ -195,12 +194,15 @@
 	});
 
 	$effect(() => {
-		// Update scanner instance when user ID changes
-		if (user?.UserId && scanner.uid !== user.UserId) {
-			scanner.stop();
-			scanner = new PlayerAnalyticsScanner(user.UserId);
+		if (user?.UserId) {
+			if (scanner && scanner.uid !== user.UserId) {
+				scanner.stop();
+				scanner = new PlayerAnalyticsScanner(user.UserId);
+			} else if (!scanner) {
+				scanner = new PlayerAnalyticsScanner(user.UserId);
+			}
 		}
-		return () => scanner.stop();
+		return () => scanner?.stop();
 	});
 </script>
 
@@ -258,7 +260,9 @@
 					username={user.Username}
 					country={user.Region}
 				/>
-				<AnalyticsDashboard {scanner} totalPlayCount={user.OverallPlaycount} />
+				{#if scanner}
+					<AnalyticsDashboard {scanner} totalPlayCount={user.OverallPlaycount} />
+				{/if}
 				<TopPlays
 					topPlays={user.Top50Plays}
 					bind:itemsToShow={topPlaysToShow}
@@ -300,7 +304,9 @@
 				{registered}
 				{lastLogin}
 			/>
-			<AnalyticsDashboard {scanner} totalPlayCount={user.OverallPlaycount} />
+			{#if scanner}
+				<AnalyticsDashboard {scanner} totalPlayCount={user.OverallPlaycount} />
+			{/if}
 			<TopPlays
 				topPlays={user.Top50Plays}
 				bind:itemsToShow={topPlaysToShow}
