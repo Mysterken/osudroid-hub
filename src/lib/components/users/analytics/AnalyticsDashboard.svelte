@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import {
 		ActivityIcon,
 		ChartNoAxesColumn,
@@ -8,37 +7,23 @@
 		SearchIcon,
 		SquareIcon,
 		TargetIcon,
-		TrophyIcon,
 		ZapIcon
 	} from 'lucide-svelte';
 	import { PlayerAnalyticsScanner } from '$lib/stores/analyticsScanner.svelte';
-	import { Collapsible, Switch } from '@skeletonlabs/skeleton-svelte';
+	import { Collapsible } from '@skeletonlabs/skeleton-svelte';
 	import { formatRelativeTime } from '$lib/utils/time';
 	import { tooltip } from '$lib/actions/tooltip';
-	import { resolve } from '$app/paths';
 	import TimelineChart from '$lib/components/users/analytics/TimelineChart.svelte';
 	import type { Play } from '$lib/models/play';
 	import { getColorFromRank } from '$lib/utils/colors';
 
 	let {
-		scanner: initialScanner,
+		scanner,
 		totalPlayCount = 0,
 		top50Plays = []
 	}: { scanner: PlayerAnalyticsScanner; totalPlayCount?: number; top50Plays?: Play[] } = $props();
 
-	let scanner = $derived(initialScanner);
-	let showUnranked = $state(false);
-
 	let open = $state(false);
-
-	$effect(() => {
-		if (scanner.uid !== initialScanner.uid) {
-			scanner.stop();
-			scanner = new PlayerAnalyticsScanner(initialScanner.uid);
-			open = scanner.stats.playCount > 0;
-		}
-		return () => scanner.stop();
-	});
 
 	// Global Request & ETA
 	let estimatedPages = $derived(Math.max(1, Math.ceil(totalPlayCount / 100)));
@@ -113,19 +98,14 @@
 	let topMappers = $derived(
 		Object.entries(scanner.stats.mappers)
 			.sort(([, a], [, b]) => b - a)
-			.slice(0, 3)
+			.slice(0, 5)
 	);
 
 	let topArtists = $derived(
 		Object.entries(scanner.stats.artists)
 			.sort(([, a], [, b]) => b - a)
-			.slice(0, 3)
+			.slice(0, 5)
 	);
-
-	let filteredFirstPlaces = $derived(
-		scanner.stats.firstPlaces.filter((fp) => showUnranked || fp.pp > 0)
-	);
-	let sortedFirstPlaces = $derived([...filteredFirstPlaces].sort((a, b) => b.pp - a.pp));
 
 	let rankedFirstsCount = $derived(
 		scanner.stats.firstPlaces.filter((fp) => Number(fp.pp) > 0).length
@@ -236,36 +216,6 @@
 			</li>
 		{/each}
 	</ul>
-{/snippet}
-
-{#snippet scoreRow(fp: (typeof sortedFirstPlaces)[0])}
-	<a
-		href={resolve(`/leaderboard/beatmapsets/0/${fp.hash}`)}
-		target="_blank"
-		rel="noopener noreferrer"
-		class="flex justify-between items-center bg-[#1E1E1E] p-3 rounded border border-[#3C3C3C] hover:border-pink-500 hover:bg-[#252525] transition-all group"
-	>
-		<div class="min-w-0 pr-4">
-			<p class="text-sm font-bold text-white truncate group-hover:text-pink-400 transition-colors">
-				{fp.title || 'Unknown Title'}
-				<span class="text-yellow-400 text-xs font-semibold ml-1"
-					>[{fp.difficulty || 'Unknown'}]</span
-				>
-			</p>
-			<p class="text-xs text-gray-400 truncate mt-0.5">
-				{fp.artist || 'Unknown Artist'} // mapped by {fp.mapper || 'Unknown'}
-			</p>
-		</div>
-		<div class="text-right shrink-0">
-			<p class="text-pink-400 font-bold">{fp.pp > 0 ? `${Math.round(fp.pp)}pp` : 'Unranked'}</p>
-			<p class="text-xs font-semibold text-gray-300 mt-0.5">
-				{(fp.accuracy * 100).toFixed(2)}%
-				{#if fp.mods && fp.mods !== 'NM'}
-					<span class="text-gray-500 ml-1">+{fp.mods}</span>
-				{/if}
-			</p>
-		</div>
-	</a>
 {/snippet}
 
 <Collapsible
@@ -442,50 +392,6 @@
 							{@render simpleList(topMappers)}
 						</div>
 					</div>
-
-					{#if scanner.mode === 'quick'}
-						<div
-							class="text-center py-6 text-sm text-gray-500 tablet-sm:col-span-2 desktop-sm:col-span-3"
-						>
-							#1 leaderboard verification is only available in Deep Scan mode.
-						</div>
-					{:else if scanner.stats.firstPlaces.length > 0}
-						<div
-							class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-3"
-						>
-							<div class="flex justify-between items-center mb-3">
-								<h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
-									<TrophyIcon size={16} class="text-yellow-400" /> #1 Scores
-								</h3>
-
-								<Switch
-									checked={showUnranked}
-									onCheckedChange={(e) => (showUnranked = e.checked)}
-									name="unranked-toggle"
-									class="flex items-center gap-2 cursor-pointer"
-								>
-									<Switch.Label
-										class="text-xs text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
-										>Include Unranked</Switch.Label
-									>
-									<Switch.Control><Switch.Thumb /></Switch.Control>
-									<Switch.HiddenInput />
-								</Switch>
-							</div>
-
-							{#if sortedFirstPlaces.length === 0}
-								<div class="text-center py-6 text-sm text-gray-500">
-									No ranked #1 scores found. Turn on "Include Unranked" to view more.
-								</div>
-							{:else}
-								<div class="max-h-[300px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-									{#each sortedFirstPlaces as fp (fp.hash)}
-										{@render scoreRow(fp)}
-									{/each}
-								</div>
-							{/if}
-						</div>
-					{/if}
 				</div>
 			{:else if scanner.status === 'idle'}
 				<div class="text-center py-8 text-gray-500 text-sm">
@@ -495,20 +401,3 @@
 		</div>
 	</Collapsible.Content>
 </Collapsible>
-
-<style>
-	.custom-scrollbar::-webkit-scrollbar {
-		width: 6px;
-	}
-	.custom-scrollbar::-webkit-scrollbar-track {
-		background: #1e1e1e;
-		border-radius: 4px;
-	}
-	.custom-scrollbar::-webkit-scrollbar-thumb {
-		background: #3c3c3c;
-		border-radius: 4px;
-	}
-	.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-		background: #4a4a4a;
-	}
-</style>

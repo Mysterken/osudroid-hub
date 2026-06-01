@@ -22,6 +22,7 @@
 	import AnalyticsDashboard from '$lib/components/users/analytics/AnalyticsDashboard.svelte';
 	import { page } from '$app/state';
 	import { PlayerAnalyticsScanner } from '$lib/stores/analyticsScanner.svelte';
+	import FirstPlaces from '$lib/components/users/first-places/FirstPlaces.svelte';
 
 	let { data }: PageProps = $props();
 
@@ -281,6 +282,9 @@
 					bind:itemsToShow={recentPlaysToShow}
 					{openModal}
 				/>
+				{#if scanner}
+					<FirstPlaces {scanner} />
+				{/if}
 			</div>
 		</div>
 
@@ -329,6 +333,9 @@
 				bind:itemsToShow={recentPlaysToShow}
 				{openModal}
 			/>
+			{#if scanner}
+				<FirstPlaces {scanner} />
+			{/if}
 		</div>
 	{:else}
 		<UserNotFound />
