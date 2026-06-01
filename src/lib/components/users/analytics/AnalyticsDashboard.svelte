@@ -12,7 +12,7 @@
 		ZapIcon
 	} from 'lucide-svelte';
 	import { PlayerAnalyticsScanner } from '$lib/stores/analyticsScanner.svelte';
-	import { Accordion, Switch } from '@skeletonlabs/skeleton-svelte';
+	import { Collapsible, Switch } from '@skeletonlabs/skeleton-svelte';
 	import { formatRelativeTime } from '$lib/utils/time';
 	import { tooltip } from '$lib/actions/tooltip';
 	import { resolve } from '$app/paths';
@@ -25,15 +25,13 @@
 	let scanner = $derived(initialScanner);
 	let showUnranked = $state(false);
 
-	let accordionValue = $state<string[]>(
-		untrack(() => (scanner.stats.playCount > 0 ? ['stats'] : []))
-	);
+	let open = $state(untrack(() => scanner.stats.playCount > 0));
 
 	$effect(() => {
 		if (scanner.uid !== initialScanner.uid) {
 			scanner.stop();
 			scanner = new PlayerAnalyticsScanner(initialScanner.uid);
-			accordionValue = scanner.stats.playCount > 0 ? ['stats'] : [];
+			open = scanner.stats.playCount > 0;
 		}
 		return () => scanner.stop();
 	});
@@ -149,6 +147,7 @@
 	>
 		{#if scanner.status === 'scraping_profile' || scanner.status === 'scanning_firsts' || scanner.status === 'rate_limited'}
 			<button
+				type="button"
 				onclick={() => {
 					scanner.stop();
 				}}
@@ -161,8 +160,9 @@
 				class="flex flex-col phone-sm:flex-row gap-3 w-full tablet-sm:w-auto tablet-sm:justify-end"
 			>
 				<button
+					type="button"
 					onclick={() => {
-						accordionValue = ['stats'];
+						open = true;
 						scanner.start(true, 'quick');
 					}}
 					class="btn preset-tonal-secondary w-full phone-sm:flex-1 tablet-sm:w-auto py-2 rounded-lg text-sm font-medium transition-all hover:preset-filled-secondary-500 flex items-center justify-center gap-2 min-w-0 shrink-0"
@@ -171,8 +171,9 @@
 					<ZapIcon size={16} class="text-yellow-400" /> Quick Scan
 				</button>
 				<button
+					type="button"
 					onclick={() => {
-						accordionValue = ['stats'];
+						open = true;
 						scanner.start(true, 'deep');
 					}}
 					class="btn preset-filled-primary-500 w-full phone-sm:flex-1 tablet-sm:w-auto py-2 rounded-lg text-sm font-bold shadow-md shadow-pink-500/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 min-w-0 shrink-0"
@@ -264,27 +265,25 @@
 	</a>
 {/snippet}
 
-<Accordion
-	class="w-full"
-	value={accordionValue}
-	onValueChange={(e) => (accordionValue = e.value)}
-	collapsible
+<Collapsible
+	class="w-full bg-[#1E1E1E] border border-[#3C3C3C] rounded-xl text-white overflow-hidden"
+	{open}
+	onOpenChange={(details) => (open = details.open)}
 >
-	<Accordion.Item
-		value="stats"
-		class="bg-[#1E1E1E] border border-[#3C3C3C] rounded-xl text-white overflow-hidden"
+	<div
+		class="flex flex-col xl:flex-row justify-between items-start xl:items-center w-full hover:bg-[#252525] transition-colors"
 	>
-		<Accordion.ItemTrigger
-			class="p-6 w-full flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 hover:bg-[#252525] transition-colors cursor-pointer text-left focus:outline-none"
+		<Collapsible.Trigger
+			class="p-6 flex-1 flex w-full items-start xl:items-center gap-4 cursor-pointer text-left focus:outline-none"
 		>
 			<div class="flex items-center gap-3">
-				<Accordion.ItemIndicator>
+				<Collapsible.Indicator>
 					<ChevronDownIcon
 						size={20}
 						class="text-gray-400 transition-transform duration-200"
-						style="transform: rotate({accordionValue.includes('stats') ? '180deg' : '0deg'})"
+						style="transform: rotate({open ? '180deg' : '0deg'})"
 					/>
-				</Accordion.ItemIndicator>
+				</Collapsible.Indicator>
 				<div>
 					<h2 class="text-xl font-bold flex items-center gap-2">
 						<ChartNoAxesColumn class="text-pink-500" /> Deep Analytics
@@ -300,200 +299,200 @@
 					</p>
 				</div>
 			</div>
+		</Collapsible.Trigger>
 
+		<div class="p-6 pt-0 xl:pt-6 xl:pl-0 flex items-center w-full xl:w-auto justify-end shrink-0">
 			{@render scanControls()}
-		</Accordion.ItemTrigger>
+		</div>
+	</div>
 
-		<Accordion.ItemContent class="p-6 pt-0 border-t border-[#3C3C3C]">
-			<div class="pt-6">
-				{@render progressBar()}
+	<Collapsible.Content class="p-6 pt-0 border-t border-[#3C3C3C]">
+		<div class="pt-6">
+			{@render progressBar()}
 
-				{#if scanner.stats.playCount > 0}
-					<div class="grid grid-cols-1 tablet-sm:grid-cols-2 desktop-sm:grid-cols-3 gap-4">
-						<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C]">
-							<h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-								<MedalIcon size={16} class="text-yellow-400" /> Highlights
-							</h3>
-							<div class="space-y-3">
-								<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
-									<div class="flex flex-col justify-end">
-										<span class="text-xs text-gray-400 leading-tight">Total #1 Scores</span>
-										<span class="text-[10px] text-gray-500 mt-1 leading-tight"
-											><span class="text-gray-300 font-semibold">{rankedFirstsCount}</span> Ranked
-											<span class="mx-0.5 opacity-50">•</span>
-											<span class="text-gray-300 font-semibold">{unrankedFirstsCount}</span> Unranked</span
-										>
-									</div>
-									<span class="text-lg font-bold text-yellow-400">
-										{scanner.stats.firstPlaces.length}
-									</span>
-								</div>
-
-								<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
-									<span class="text-xs text-gray-400">Highest Score</span>
-									<span class="text-lg font-bold text-white">
-										{scanner.stats.highestScore
-											? scanner.stats.highestScore.score.toLocaleString()
-											: '—'}
-									</span>
-								</div>
-
-								<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
-									<span class="text-xs text-gray-400">Highest Combo</span>
-									<span class="text-lg font-bold text-green-400">
-										{scanner.stats.maxCombo.toLocaleString()}x
-									</span>
-								</div>
-
-								<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
-									<span class="text-xs text-gray-400">Total Hits</span>
-									<span class="text-lg font-bold text-white">{totalHits.toLocaleString()}</span>
-								</div>
-							</div>
-						</div>
-
-						<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C]">
-							<h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-								<TargetIcon size={16} class="text-blue-400" /> Grade Spread
-							</h3>
-							<div class="grid grid-cols-4 gap-2 text-center">
-								{#each ['XH', 'SH', 'X', 'S', 'A', 'B', 'C', 'D'] as grade (grade)}
-									<div class="bg-[#1E1E1E] rounded p-1.5 border border-[#3C3C3C]">
-										<div
-											class="text-[10px] font-bold"
-											style="color: var(--grade-{grade.toLowerCase()}, #fff)"
-										>
-											{grade}
-										</div>
-										<div class="text-xs font-semibold text-gray-300 mt-0.5">
-											{scanner.stats.grades[grade] > 999
-												? (scanner.stats.grades[grade] / 1000).toFixed(1) + 'k'
-												: scanner.stats.grades[grade]}
-										</div>
-									</div>
-								{/each}
-							</div>
-						</div>
-
-						<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C]">
-							<h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-								<ActivityIcon size={16} class="text-green-400" /> Accuracy Breakdown
-							</h3>
-							{#if totalHits > 0}
-								<div class="space-y-2">
-									<div class="w-full h-3 flex rounded-full overflow-hidden mb-2">
-										<div style="width: {(hits300 / totalHits) * 100}%" class="bg-blue-400"></div>
-										<div style="width: {(hits100 / totalHits) * 100}%" class="bg-green-400"></div>
-										<div style="width: {(hits50 / totalHits) * 100}%" class="bg-yellow-500"></div>
-										<div style="width: {(hitsMiss / totalHits) * 100}%" class="bg-red-500"></div>
-									</div>
-									<div class="flex justify-between text-[11px] font-medium">
-										<span class="text-blue-400 cursor-help" use:tooltip={{ text: `${hits300}` }}>
-											300: {((hits300 / totalHits) * 100).toFixed(1)}%
-										</span>
-										<span class="text-green-400 cursor-help" use:tooltip={{ text: `${hits100}` }}>
-											100: {((hits100 / totalHits) * 100).toFixed(1)}%
-										</span>
-										<span class="text-yellow-500 cursor-help" use:tooltip={{ text: `${hits50}` }}>
-											50: {((hits50 / totalHits) * 100).toFixed(1)}%
-										</span>
-										<span class="text-red-400 cursor-help" use:tooltip={{ text: `${hitsMiss}` }}>
-											Miss: {((hitsMiss / totalHits) * 100).toFixed(1)}%
-										</span>
-									</div>
-								</div>
-							{/if}
-						</div>
-
-						<div
-							class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-1"
-						>
-							<h3 class="text-sm font-semibold text-gray-300 mb-3">Top Mod Combinations</h3>
-							<ul class="space-y-2">
-								{#each topMods as [modName, stats] (modName)}
-									<li class="flex justify-between items-center text-xs">
-										<span
-											class="font-bold bg-[#1E1E1E] px-2 py-0.5 rounded border border-[#3C3C3C]"
-										>
-											{modName}
-										</span>
-										<div class="text-right">
-											<span class="text-gray-400">{stats.count} plays</span>
-											<span class="text-pink-400 font-semibold ml-2">
-												{stats.avgPp > 0 ? `${Math.round(stats.avgPp)} pp avg` : 'Unranked'}
-											</span>
-										</div>
-									</li>
-								{/each}
-							</ul>
-						</div>
-
-						<div
-							class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-2 grid grid-cols-2 gap-4"
-						>
-							<div class="min-w-0">
-								<h3 class="text-sm font-semibold text-gray-300 mb-2">Favorite Artists</h3>
-								{@render simpleList(topArtists)}
-							</div>
-							<div class="min-w-0">
-								<h3 class="text-sm font-semibold text-gray-300 mb-2">Favorite Mappers</h3>
-								{@render simpleList(topMappers)}
-							</div>
-						</div>
-
-						{#if scanner.mode === 'quick'}
-							<div
-								class="text-center py-6 text-sm text-gray-500 tablet-sm:col-span-2 desktop-sm:col-span-3"
-							>
-								#1 leaderboard verification is only available in Deep Scan mode.
-							</div>
-						{:else if scanner.stats.firstPlaces.length > 0}
-							<div
-								class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-3"
-							>
-								<div class="flex justify-between items-center mb-3">
-									<h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
-										<TrophyIcon size={16} class="text-yellow-400" /> #1 Scores
-									</h3>
-
-									<Switch
-										checked={showUnranked}
-										onCheckedChange={(e) => (showUnranked = e.checked)}
-										name="unranked-toggle"
-										class="flex items-center gap-2 cursor-pointer"
+			{#if scanner.stats.playCount > 0}
+				<div class="grid grid-cols-1 tablet-sm:grid-cols-2 desktop-sm:grid-cols-3 gap-4">
+					<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C]">
+						<h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+							<MedalIcon size={16} class="text-yellow-400" /> Highlights
+						</h3>
+						<div class="space-y-3">
+							<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
+								<div class="flex flex-col justify-end">
+									<span class="text-xs text-gray-400 leading-tight">Total #1 Scores</span>
+									<span class="text-[10px] text-gray-500 mt-1 leading-tight"
+										><span class="text-gray-300 font-semibold">{rankedFirstsCount}</span> Ranked
+										<span class="mx-0.5 opacity-50">•</span>
+										<span class="text-gray-300 font-semibold">{unrankedFirstsCount}</span> Unranked</span
 									>
-										<Switch.Label
-											class="text-xs text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
-											>Include Unranked</Switch.Label
-										>
-										<Switch.Control><Switch.Thumb /></Switch.Control>
-										<Switch.HiddenInput />
-									</Switch>
 								</div>
+								<span class="text-lg font-bold text-yellow-400"
+									>{scanner.stats.firstPlaces.length}</span
+								>
+							</div>
 
-								{#if sortedFirstPlaces.length === 0}
-									<div class="text-center py-6 text-sm text-gray-500">
-										No ranked #1 scores found. Turn on "Include Unranked" to view more.
+							<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
+								<span class="text-xs text-gray-400">Highest Score</span>
+								<span class="text-lg font-bold text-white"
+									>{scanner.stats.highestScore
+										? scanner.stats.highestScore.score.toLocaleString()
+										: '—'}</span
+								>
+							</div>
+
+							<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
+								<span class="text-xs text-gray-400">Highest Combo</span>
+								<span class="text-lg font-bold text-green-400"
+									>{scanner.stats.maxCombo.toLocaleString()}x</span
+								>
+							</div>
+
+							<div class="grid grid-cols-[1fr_auto] items-center gap-x-4">
+								<span class="text-xs text-gray-400">Total Hits</span>
+								<span class="text-lg font-bold text-white">{totalHits.toLocaleString()}</span>
+							</div>
+						</div>
+					</div>
+
+					<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C]">
+						<h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+							<TargetIcon size={16} class="text-blue-400" /> Grade Spread
+						</h3>
+						<div class="grid grid-cols-4 gap-2 text-center">
+							{#each ['XH', 'SH', 'X', 'S', 'A', 'B', 'C', 'D'] as grade (grade)}
+								<div class="bg-[#1E1E1E] rounded p-1.5 border border-[#3C3C3C]">
+									<div
+										class="text-[10px] font-bold"
+										style="color: var(--grade-{grade.toLowerCase()}, #fff)"
+									>
+										{grade}
 									</div>
-								{:else}
-									<div class="max-h-[300px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-										{#each sortedFirstPlaces as fp (fp.hash)}
-											{@render scoreRow(fp)}
-										{/each}
+									<div class="text-xs font-semibold text-gray-300 mt-0.5">
+										{scanner.stats.grades[grade] > 999
+											? (scanner.stats.grades[grade] / 1000).toFixed(1) + 'k'
+											: scanner.stats.grades[grade]}
 									</div>
-								{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+
+					<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C]">
+						<h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+							<ActivityIcon size={16} class="text-green-400" /> Accuracy Breakdown
+						</h3>
+						{#if totalHits > 0}
+							<div class="space-y-2">
+								<div class="w-full h-3 flex rounded-full overflow-hidden mb-2">
+									<div style="width: {(hits300 / totalHits) * 100}%" class="bg-blue-400"></div>
+									<div style="width: {(hits100 / totalHits) * 100}%" class="bg-green-400"></div>
+									<div style="width: {(hits50 / totalHits) * 100}%" class="bg-yellow-500"></div>
+									<div style="width: {(hitsMiss / totalHits) * 100}%" class="bg-red-500"></div>
+								</div>
+								<div class="flex justify-between text-[11px] font-medium">
+									<span class="text-blue-400 cursor-help" use:tooltip={{ text: `${hits300}` }}
+										>300: {((hits300 / totalHits) * 100).toFixed(1)}%</span
+									>
+									<span class="text-green-400 cursor-help" use:tooltip={{ text: `${hits100}` }}
+										>100: {((hits100 / totalHits) * 100).toFixed(1)}%</span
+									>
+									<span class="text-yellow-500 cursor-help" use:tooltip={{ text: `${hits50}` }}
+										>50: {((hits50 / totalHits) * 100).toFixed(1)}%</span
+									>
+									<span class="text-red-400 cursor-help" use:tooltip={{ text: `${hitsMiss}` }}
+										>Miss: {((hitsMiss / totalHits) * 100).toFixed(1)}%</span
+									>
+								</div>
 							</div>
 						{/if}
 					</div>
-				{:else if scanner.status === 'idle'}
-					<div class="text-center py-8 text-gray-500 text-sm">
-						Click "Deep Scan" or "Quick Scan" to analyze this player's history locally.
+
+					<div
+						class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-1"
+					>
+						<h3 class="text-sm font-semibold text-gray-300 mb-3">Top Mod Combinations</h3>
+						<ul class="space-y-2">
+							{#each topMods as [modName, stats] (modName)}
+								<li class="flex justify-between items-center text-xs">
+									<span class="font-bold bg-[#1E1E1E] px-2 py-0.5 rounded border border-[#3C3C3C]"
+										>{modName}</span
+									>
+									<div class="text-right">
+										<span class="text-gray-400">{stats.count} plays</span>
+										<span class="text-pink-400 font-semibold ml-2"
+											>{stats.avgPp > 0 ? `${Math.round(stats.avgPp)} pp avg` : 'Unranked'}</span
+										>
+									</div>
+								</li>
+							{/each}
+						</ul>
 					</div>
-				{/if}
-			</div>
-		</Accordion.ItemContent>
-	</Accordion.Item>
-</Accordion>
+
+					<div
+						class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-2 grid grid-cols-2 gap-4"
+					>
+						<div class="min-w-0">
+							<h3 class="text-sm font-semibold text-gray-300 mb-2">Favorite Artists</h3>
+							{@render simpleList(topArtists)}
+						</div>
+						<div class="min-w-0">
+							<h3 class="text-sm font-semibold text-gray-300 mb-2">Favorite Mappers</h3>
+							{@render simpleList(topMappers)}
+						</div>
+					</div>
+
+					{#if scanner.mode === 'quick'}
+						<div
+							class="text-center py-6 text-sm text-gray-500 tablet-sm:col-span-2 desktop-sm:col-span-3"
+						>
+							#1 leaderboard verification is only available in Deep Scan mode.
+						</div>
+					{:else if scanner.stats.firstPlaces.length > 0}
+						<div
+							class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-3"
+						>
+							<div class="flex justify-between items-center mb-3">
+								<h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+									<TrophyIcon size={16} class="text-yellow-400" /> #1 Scores
+								</h3>
+
+								<Switch
+									checked={showUnranked}
+									onCheckedChange={(e) => (showUnranked = e.checked)}
+									name="unranked-toggle"
+									class="flex items-center gap-2 cursor-pointer"
+								>
+									<Switch.Label
+										class="text-xs text-gray-400 font-medium cursor-pointer hover:text-white transition-colors"
+										>Include Unranked</Switch.Label
+									>
+									<Switch.Control><Switch.Thumb /></Switch.Control>
+									<Switch.HiddenInput />
+								</Switch>
+							</div>
+
+							{#if sortedFirstPlaces.length === 0}
+								<div class="text-center py-6 text-sm text-gray-500">
+									No ranked #1 scores found. Turn on "Include Unranked" to view more.
+								</div>
+							{:else}
+								<div class="max-h-[300px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+									{#each sortedFirstPlaces as fp (fp.hash)}
+										{@render scoreRow(fp)}
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			{:else if scanner.status === 'idle'}
+				<div class="text-center py-8 text-gray-500 text-sm">
+					Click "Deep Scan" or "Quick Scan" to analyze this player's history locally.
+				</div>
+			{/if}
+		</div>
+	</Collapsible.Content>
+</Collapsible>
 
 <style>
 	.custom-scrollbar::-webkit-scrollbar {
