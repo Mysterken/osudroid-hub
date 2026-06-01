@@ -113,60 +113,62 @@
 			</div>
 
 			<div class="h-full pl-10 custom-chart">
-				<Chart
-					data={chartData}
-					x="date"
-					xScale={scaleTime()}
-					y={activeTab === 'plays' ? 'monthlyPlays' : 'cumulativePp'}
-					yDomain={[0, yAxisTop]}
-					padding={{ left: 8, bottom: 24, right: 16, top: 16 }}
-					tooltip={{ mode: 'bisect-x' }}
-				>
-					<Svg>
-						<Axis
-							placement="left"
-							grid
-							rule
-							classes={{
-								rule: 'stroke-[#4A4A4A]',
-								tick: 'stroke-[#4A4A4A]',
-								tickLabel: 'fill-transparent'
-							}}
-						/>
-						<Axis
-							placement="bottom"
-							format={(d) => format(d, 'MMM yy')}
-							rule
-							classes={{
-								rule: 'stroke-[#4A4A4A]',
-								tick: 'stroke-[#4A4A4A]',
-								tickLabel: 'fill-gray-400 text-xs'
-							}}
-						/>
-
-						<Spline
-							stroke={lineColor}
-							stroke-width="2"
-							class="fill-none transition-colors duration-300"
-						/>
-						<Highlight points={{ fill: lineColor, r: 3 }} lines />
-					</Svg>
-
-					<Tooltip.Root let:data>
-						<Tooltip.Header class="font-bold text-white mb-1">
-							{format(data.date, 'MMMM yyyy')}
-						</Tooltip.Header>
-						<Tooltip.List>
-							<Tooltip.Item
-								label={activeTab === 'plays' ? 'Monthly Plays' : 'Total PP'}
-								value={activeTab === 'plays'
-									? data.monthlyPlays
-									: `${Math.round(data.cumulativePp).toLocaleString()} pp`}
-								color={lineColor}
+				{#key activeTab}
+					<Chart
+						data={chartData}
+						x="date"
+						xScale={scaleTime()}
+						y={activeTab === 'plays' ? 'monthlyPlays' : 'cumulativePp'}
+						yDomain={[0, yAxisTop]}
+						padding={{ left: 8, bottom: 24, right: 16, top: 16 }}
+						tooltip={{ mode: 'bisect-x' }}
+					>
+						<Svg>
+							<Axis
+								placement="left"
+								grid
+								rule
+								classes={{
+									rule: 'stroke-[#4A4A4A]',
+									tick: 'stroke-[#4A4A4A]',
+									tickLabel: 'fill-transparent'
+								}}
 							/>
-						</Tooltip.List>
-					</Tooltip.Root>
-				</Chart>
+							<Axis
+								placement="bottom"
+								format={(d) => format(d, 'MMM yy')}
+								rule
+								classes={{
+									rule: 'stroke-[#4A4A4A]',
+									tick: 'stroke-[#4A4A4A]',
+									tickLabel: 'fill-gray-400 text-xs'
+								}}
+							/>
+
+							<Spline
+								stroke={lineColor}
+								stroke-width="2"
+								class="fill-none transition-colors duration-300"
+							/>
+							<Highlight points={{ fill: lineColor, r: 3 }} lines />
+						</Svg>
+
+						<Tooltip.Root let:data>
+							<Tooltip.Header class="font-bold text-white mb-1">
+								{format(data.date, 'MMMM yyyy')}
+							</Tooltip.Header>
+							<Tooltip.List>
+								<Tooltip.Item
+									label={activeTab === 'plays' ? 'Monthly Plays' : 'Total PP'}
+									value={activeTab === 'plays'
+										? data.monthlyPlays
+										: `${Math.round(data.cumulativePp).toLocaleString()} pp`}
+									color={lineColor}
+								/>
+							</Tooltip.List>
+						</Tooltip.Root>
+					</Chart>
+				{/key}
 			</div>
 		</div>
 
