@@ -172,13 +172,52 @@ function formatLength(length?: number): string {
 }
 
 /**
- * Calculates the simulated performance points (PP) of a set of plays.
- * @param plays
+ * Calculates the official osu! total PP from an array of unique PP values.
+ * Applies the weight formula and adds Bonus PP.
+ * @param uniquePPs An array containing the highest PP value per beatmap.
+ * @param totalScoreCount Optional: The player's total ranked score count. Defaults to the array length.
  */
-function getSimulatedPerformancePoints(plays: Play[]): number {
-	return plays.reduce((total, play, index) => {
-		return total + calculateRawPP(play.MapPP, index + 1);
+function calculateTotalPP(uniquePPs: number[], totalScoreCount?: number): number {
+	if (!uniquePPs || uniquePPs.length === 0) return 0;
+
+	// Sort Strictly Descending
+	const sortedPP = [...uniquePPs].sort((a, b) => b - a);
+
+	// Calculate Weighted Sum (p * 0.95^(n-1))
+	const weightedPP = sortedPP.reduce((total, pp, index) => {
+		return total + calculateRawPP(pp, index + 1);
 	}, 0);
+
+	// Calculate Bonus PP
+	const N = totalScoreCount || sortedPP.length;
+	const bonusPP = 416.6667 * (1 - Math.pow(0.9994, N));
+
+	return weightedPP + bonusPP;
+}
+
+/**
+ * Calculates the simulated performance points (PP) of a set of plays.
+ * Matches the official osu! mathematical algorithm.
+ * @param plays The array of Play models.
+ * @param totalScoreCount Optional: The player's total ranked score count.
+ */
+function getSimulatedPerformancePoints(plays: Play[], totalScoreCount?: number): number {
+	if (!plays || plays.length === 0) return 0;
+
+	const uniquePlaysMap = new Map<string, number>();
+
+	for (const play of plays) {
+		if (!play.Hash || play.MapPP == null) continue;
+
+		const mapId = play.Hash;
+		const currentBest = uniquePlaysMap.get(mapId) || 0;
+
+		if (play.MapPP > currentBest) {
+			uniquePlaysMap.set(mapId, play.MapPP);
+		}
+	}
+
+	return calculateTotalPP(Array.from(uniquePlaysMap.values()), totalScoreCount);
 }
 
 /**
@@ -206,6 +245,7 @@ export function parseModsArray(mods: BeatmapScore['mods']): string[] {
 
 export const playUtils = {
 	calculateRawPP,
+	calculateTotalPP,
 	convertStringIntoPlayDetails,
 	convertLongModNameToAlias,
 	convertAliasToLongModName,
