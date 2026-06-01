@@ -16,7 +16,7 @@
 		dialog = $bindable(),
 		beatmap,
 		play,
-		isLoading = false // 🌟 New prop to gracefully suspend rendering!
+		isLoading = false
 	}: {
 		dialog?: HTMLDialogElement;
 		beatmap?: BeatmapExtended | null;
@@ -67,7 +67,7 @@
 		beatmap?.version || fallbackMeta?.difficulty || 'Unknown Difficulty'
 	);
 
-	// 🌟 SAFELY check if it's a real map or a fallback map (id === 0)
+	// SAFELY check if it's a real map or a fallback map (id === 0)
 	let leaderboardLink = $derived(
 		beatmap && beatmap.id !== 0
 			? `/leaderboard/beatmapsets/${beatmap.beatmapset_id}/${beatmap.id}`

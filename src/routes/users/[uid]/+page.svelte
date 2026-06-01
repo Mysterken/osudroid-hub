@@ -283,7 +283,7 @@
 					{openModal}
 				/>
 				{#if scanner}
-					<FirstPlaces {scanner} />
+					<FirstPlaces {scanner} {beatmaps} {openModal} />
 				{/if}
 			</div>
 		</div>
@@ -334,7 +334,7 @@
 				{openModal}
 			/>
 			{#if scanner}
-				<FirstPlaces {scanner} />
+				<FirstPlaces {scanner} {beatmaps} {openModal} />
 			{/if}
 		</div>
 	{:else}

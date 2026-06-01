@@ -4,26 +4,13 @@
 	import { convertTitleToBeatmapMetadata } from '$lib/utils/playUtils';
 	import type { BeatmapScore } from '$lib/models/beatmapScore';
 	import { playUtils } from '$lib/utils/playUtils';
-	import type { Play } from '$lib/models/play';
+	import type { ApiPlay } from '$lib/models/play';
 
 	const API_BASE_URL = 'https://new.osudroid.moe/api2/frontend';
 	const DB_NAME = 'osudroid_hub_analytics';
 	const STORE_NAME = 'player_profiles';
 
 	export type ScanMode = 'quick' | 'deep';
-
-	export type FirstPlace = {
-		hash: string;
-		score: number;
-		pp: number;
-		accuracy: number;
-		date: number;
-		mods: string;
-		title: string;
-		artist: string;
-		mapper: string;
-		difficulty: string;
-	};
 
 	export type AnalyticsStats = {
 		playCount: number;
@@ -37,7 +24,7 @@
 		ppTimeline: { date: number; cumulativePp: number }[];
 		mappers: Record<string, number>;
 		artists: Record<string, number>;
-		firstPlaces: FirstPlace[];
+		firstPlaces: ApiPlay[];
 		duplicateHashes: number;
 	};
 
@@ -223,7 +210,7 @@
 			}
 		}
 
-		async start(forceRestart = false, mode: ScanMode = this.mode, top50Plays: Play[] = []) {
+		async start(forceRestart = false, mode: ScanMode = this.mode, top50Plays: ApiPlay[] = []) {
 			if (['scraping_profile', 'scanning_firsts', 'rate_limited'].includes(this.status)) return;
 
 			if (forceRestart || this.status === 'done' || this.status === 'failed') {
@@ -239,7 +226,7 @@
 				// Phase 1: Scrape user's plays
 				this.status = 'scraping_profile';
 				const potentialFirstPlaces = new SvelteSet<string>();
-				const seenHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.hash));
+				const seenHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.Hash));
 
 				let page = this.pagesFetched;
 
@@ -346,7 +333,7 @@
 				// Phase 2: Verify #1 scores (deep scan only)
 				if (this.mode === 'deep') {
 					this.status = 'scanning_firsts';
-					const existingHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.hash));
+					const existingHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.Hash));
 					const hashesToCheck = Array.from(potentialFirstPlaces).filter(
 						(h) => !existingHashes.has(h)
 					);
@@ -367,21 +354,27 @@
 							const top = Array.isArray(leaderboard) ? leaderboard[0] : null;
 
 							if (top && String(top.uid) === String(this.uid) && !existingHashes.has(hash)) {
-								const { songTitle, songArtist, mapper, difficulty } = convertTitleToBeatmapMetadata(
-									top.filename || ''
-								);
-
 								this.stats.firstPlaces.push({
-									hash,
-									score: top.score,
-									pp: top.pp,
-									accuracy: top.accuracy || 0,
-									date: top.date,
-									mods: playUtils.parseModsArray(top.mods).join('') || 'NM',
-									title: songTitle,
-									artist: songArtist,
-									mapper: mapper,
-									difficulty: difficulty
+									Hash: top.hash || '',
+									Filename: top.filename || '',
+									MapAccuracy: top.accuracy || 0,
+									MapBad: top.bad || 0,
+									MapCombo: top.combo || 0,
+									MapGeki: top.geki || 0,
+									MapGood: top.good || 0,
+									MapKatu: top.katu || 0,
+									MapMiss: top.miss || 0,
+									MapPP: top.pp || 0,
+									MapPerfect: top.perfect || 0,
+									MapRank: top.mark || 'S',
+									MapScore: top.score || 0,
+									Mods: top.mods || 'NM',
+									PlayedDate: top.date ? new Date(top.date * 1000).toISOString() : '',
+									ScoreId: top.id || 0,
+									SliderEndHit: top.sliderEndHit || 0,
+									SliderHeadHit: top.sliderHeadHit || 0,
+									SliderRepeatHit: top.sliderRepeatHit || 0,
+									SliderTickHit: top.sliderTickHit || 0
 								});
 								existingHashes.add(hash);
 							}
