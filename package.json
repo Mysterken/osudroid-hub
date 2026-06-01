@@ -24,6 +24,7 @@
 		"@sveltejs/kit": "^2.61.1",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@tailwindcss/forms": "^0.5.11",
+		"@types/d3-scale": "^4",
 		"eslint": "^10.4.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.18.0",
@@ -46,7 +47,9 @@
 		"axios": "^1.16.1",
 		"cheerio": "^1.2.0",
 		"crawler-user-agents": "^1.45.0",
+		"d3-scale": "^4.0.2",
 		"flag-icons": "^7.5.0",
+		"layerchart": "^1.0.13",
 		"lucide-svelte": "^1.0.1",
 		"pino": "^10.3.1",
 		"tailwindcss": "^4.3.0"

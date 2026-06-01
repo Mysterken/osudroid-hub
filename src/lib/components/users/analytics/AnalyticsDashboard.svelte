@@ -16,6 +16,7 @@
 	import { formatRelativeTime } from '$lib/utils/time';
 	import { tooltip } from '$lib/actions/tooltip';
 	import { resolve } from '$app/paths';
+	import TimelineChart from '$lib/components/users/analytics/TimelineChart.svelte';
 
 	let {
 		scanner: initialScanner,
@@ -405,6 +406,12 @@
 								</div>
 							</div>
 						{/if}
+					</div>
+
+					<div
+						class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-3"
+					>
+						<TimelineChart stats={scanner.stats} />
 					</div>
 
 					<div
