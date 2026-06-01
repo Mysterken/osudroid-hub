@@ -14,6 +14,7 @@
 	import { PlayerAnalyticsScanner } from '$lib/stores/analyticsScanner.svelte';
 	import { Accordion, Switch } from '@skeletonlabs/skeleton-svelte';
 	import { formatRelativeTime } from '$lib/utils/time';
+	import { tooltip } from '$lib/actions/tooltip';
 	import { resolve } from '$app/paths';
 
 	let {
@@ -387,16 +388,16 @@
 										<div style="width: {(hitsMiss / totalHits) * 100}%" class="bg-red-500"></div>
 									</div>
 									<div class="flex justify-between text-[11px] font-medium">
-										<span class="text-blue-400">
+										<span class="text-blue-400 cursor-help" use:tooltip={{ text: `${hits300}` }}>
 											300: {((hits300 / totalHits) * 100).toFixed(1)}%
 										</span>
-										<span class="text-green-400">
+										<span class="text-green-400 cursor-help" use:tooltip={{ text: `${hits100}` }}>
 											100: {((hits100 / totalHits) * 100).toFixed(1)}%
 										</span>
-										<span class="text-yellow-500">
+										<span class="text-yellow-500 cursor-help" use:tooltip={{ text: `${hits50}` }}>
 											50: {((hits50 / totalHits) * 100).toFixed(1)}%
 										</span>
-										<span class="text-red-400">
+										<span class="text-red-400 cursor-help" use:tooltip={{ text: `${hitsMiss}` }}>
 											Miss: {((hitsMiss / totalHits) * 100).toFixed(1)}%
 										</span>
 									</div>
