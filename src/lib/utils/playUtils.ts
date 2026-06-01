@@ -190,7 +190,8 @@ function calculateTotalPP(uniquePPs: number[], totalScoreCount?: number): number
 
 	// Calculate Bonus PP
 	const N = totalScoreCount || sortedPP.length;
-	const bonusPP = 416.6667 * (1 - Math.pow(0.9994, N));
+	const clampedN = Math.min(N, 1000);
+	const bonusPP = 416.6667 * (1 - Math.pow(0.9994, clampedN));
 
 	return weightedPP + bonusPP;
 }
