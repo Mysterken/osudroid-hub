@@ -1,18 +1,20 @@
 <script lang="ts">
+	import { getColorFromRank } from '$lib/utils/colors';
+
 	let { sx, rank }: { sx: string; rank: string } = $props();
 	let letterRank = $derived(rank?.toUpperCase());
 
 	function getRankColor(rank: string): { color: string; displayLetter: string } {
 		const rankMap: Record<string, { color: string; displayLetter: string }> = {
-			XH: { color: '#FFFFFF', displayLetter: 'SS' },
-			SH: { color: '#FFFFFF', displayLetter: 'S' },
-			X: { color: '#FFFF00', displayLetter: 'SS' },
-			SS: { color: '#FFFF00', displayLetter: 'SS' },
-			S: { color: '#FFFF00', displayLetter: 'S' },
-			A: { color: '#008000', displayLetter: 'A' },
-			B: { color: '#0000FF', displayLetter: 'B' },
-			C: { color: '#800080', displayLetter: 'C' },
-			D: { color: '#800020', displayLetter: 'D' }
+			XH: { color: getColorFromRank('XH'), displayLetter: 'SS' },
+			SH: { color: getColorFromRank('SH'), displayLetter: 'S' },
+			X: { color: getColorFromRank('X'), displayLetter: 'SS' },
+			SS: { color: getColorFromRank('SS'), displayLetter: 'SS' },
+			S: { color: getColorFromRank('S'), displayLetter: 'S' },
+			A: { color: getColorFromRank('A'), displayLetter: 'A' },
+			B: { color: getColorFromRank('B'), displayLetter: 'B' },
+			C: { color: getColorFromRank('C'), displayLetter: 'C' },
+			D: { color: getColorFromRank('D'), displayLetter: 'D' }
 		};
 		return rankMap[rank] || { color: '#FFFFFF', displayLetter: rank };
 	}

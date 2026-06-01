@@ -18,6 +18,7 @@
 	import { resolve } from '$app/paths';
 	import TimelineChart from '$lib/components/users/analytics/TimelineChart.svelte';
 	import type { Play } from '$lib/models/play';
+	import { getColorFromRank } from '$lib/utils/colors';
 
 	let {
 		scanner: initialScanner,
@@ -28,7 +29,7 @@
 	let scanner = $derived(initialScanner);
 	let showUnranked = $state(false);
 
-	let open = $state(untrack(() => scanner.stats.playCount > 0));
+	let open = $state(false);
 
 	$effect(() => {
 		if (scanner.uid !== initialScanner.uid) {
@@ -154,35 +155,34 @@
 				onclick={() => {
 					scanner.stop();
 				}}
-				class="btn preset-filled-error-500 w-full tablet-sm:w-auto py-2 rounded-lg text-sm font-semibold transition-all hover:scale-[1.02] shadow-sm flex items-center justify-center gap-2"
+				class="btn preset-filled-error-500 flex-1 xl:flex-none py-2 px-4 rounded-lg text-sm font-semibold transition-all hover:scale-[1.02] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
 			>
-				<SquareIcon size={16} class="fill-current" /> Stop Scanner
+				<SquareIcon size={16} class="fill-current shrink-0" /> Stop Scanner
 			</button>
 		{:else}
-			<div
-				class="flex flex-col phone-sm:flex-row gap-3 w-full tablet-sm:w-auto tablet-sm:justify-end"
-			>
+			<div class="flex flex-row w-full xl:w-auto gap-3">
 				<button
 					type="button"
 					onclick={() => {
 						open = true;
 						scanner.start(true, 'quick', top50Plays);
 					}}
-					class="btn preset-tonal-secondary w-full phone-sm:flex-1 tablet-sm:w-auto py-2 rounded-lg text-sm font-medium transition-all hover:preset-filled-secondary-500 flex items-center justify-center gap-2 min-w-0 shrink-0"
+					class="btn preset-tonal-secondary flex-1 xl:flex-none py-2 px-3 rounded-lg text-sm font-medium transition-all hover:preset-filled-secondary-500 flex items-center justify-center gap-1.5 whitespace-nowrap"
 					title="Scan recent plays quickly"
 				>
-					<ZapIcon size={16} class="text-yellow-400" /> Quick Scan
+					<ZapIcon size={16} class="text-yellow-400 shrink-0" /> Quick Scan
 				</button>
+
 				<button
 					type="button"
 					onclick={() => {
 						open = true;
 						scanner.start(true, 'deep', top50Plays);
 					}}
-					class="btn preset-filled-primary-500 w-full phone-sm:flex-1 tablet-sm:w-auto py-2 rounded-lg text-sm font-bold shadow-md shadow-pink-500/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 min-w-0 shrink-0"
+					class="btn preset-filled-primary-500 flex-1 xl:flex-none py-2 px-3 rounded-lg text-sm font-bold shadow-md shadow-pink-500/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-1.5 whitespace-nowrap"
 					title="Thoroughly scan entire history"
 				>
-					<SearchIcon size={16} /> Deep Scan
+					<SearchIcon size={16} class="shrink-0" /> Deep Scan
 				</button>
 			</div>
 		{/if}
@@ -314,7 +314,7 @@
 			{@render progressBar()}
 
 			{#if scanner.stats.playCount > 0}
-				<div class="grid grid-cols-1 tablet-sm:grid-cols-2 desktop-sm:grid-cols-3 gap-4">
+				<div class="grid grid-cols-1 tablet-sm:grid-cols-3 gap-4">
 					<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C]">
 						<h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
 							<MedalIcon size={16} class="text-yellow-400" /> Highlights
@@ -364,10 +364,7 @@
 						<div class="grid grid-cols-4 gap-2 text-center">
 							{#each ['XH', 'SH', 'X', 'S', 'A', 'B', 'C', 'D'] as grade (grade)}
 								<div class="bg-[#1E1E1E] rounded p-1.5 border border-[#3C3C3C]">
-									<div
-										class="text-[10px] font-bold"
-										style="color: var(--grade-{grade.toLowerCase()}, #fff)"
-									>
+									<div class="text-[10px] font-bold" style="color: {getColorFromRank(grade)}">
 										{grade}
 									</div>
 									<div class="text-xs font-semibold text-gray-300 mt-0.5">
@@ -410,15 +407,11 @@
 						{/if}
 					</div>
 
-					<div
-						class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-3"
-					>
+					<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-3">
 						<TimelineChart stats={scanner.stats} />
 					</div>
 
-					<div
-						class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-2 desktop-sm:col-span-1"
-					>
+					<div class="bg-[#2A2A2A] rounded-lg p-4 border border-[#3C3C3C] tablet-sm:col-span-1">
 						<h3 class="text-sm font-semibold text-gray-300 mb-3">Top Mod Combinations</h3>
 						<ul class="space-y-2">
 							{#each topMods as [modName, stats] (modName)}

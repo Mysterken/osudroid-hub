@@ -55,13 +55,22 @@ export function getDifficultyColor(starRating: number): string {
 }
 
 /**
- * Returns the traditional difficulty classification name based on the thresholds.
+ * Maps an osu! rank grade to its specific thematic color hex code.
  */
-export function getDifficultyName(starRating: number): string {
-	if (starRating < 2.0) return 'Easy';
-	if (starRating < 2.7) return 'Normal';
-	if (starRating < 4.0) return 'Hard';
-	if (starRating < 5.3) return 'Insane';
-	if (starRating < 6.5) return 'Expert';
-	return 'Expert+';
+export function getColorFromRank(rank: string): string {
+	const normalizedRank = rank.toUpperCase().trim();
+
+	const colorMap: Record<string, string> = {
+		XH: '#FFFFFF',
+		SH: '#FFFFFF',
+		X: '#FFFF00',
+		SS: '#FFFF00',
+		S: '#FFFF00',
+		A: '#008000',
+		B: '#0000FF',
+		C: '#800080',
+		D: '#800020'
+	};
+
+	return colorMap[normalizedRank] || '#FFFFFF';
 }

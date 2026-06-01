@@ -72,25 +72,28 @@
 	});
 
 	let lineColor = $derived(activeTab === 'plays' ? '#6366f1' : '#ec4899');
+
+	let containerHeight = $state(0);
 </script>
 
 <div class="bg-[#2A2A2A] rounded-lg">
 	<div
-		class="flex flex-col phone-sm:flex-row justify-between items-start phone-sm:items-center gap-4 mb-4"
+		class="flex flex-col tablet-sm:flex-row justify-between items-start tablet-sm:items-center gap-4 mb-4 w-full"
 	>
-		<h3 class="text-sm font-semibold text-gray-300">Progression Timeline</h3>
+		<h3 class="text-sm font-semibold text-gray-300 shrink-0">Progression Timeline</h3>
 
 		<SegmentedControl
 			value={activeTab}
 			onValueChange={(details) => (activeTab = details.value as 'plays' | 'pp')}
+			class="w-full tablet-sm:w-auto"
 		>
-			<SegmentedControl.Control>
+			<SegmentedControl.Control class="w-full flex">
 				<SegmentedControl.Indicator />
-				<SegmentedControl.Item value="plays">
+				<SegmentedControl.Item value="plays" class="flex-1">
 					<SegmentedControl.ItemText>Playcount</SegmentedControl.ItemText>
 					<SegmentedControl.ItemHiddenInput />
 				</SegmentedControl.Item>
-				<SegmentedControl.Item value="pp">
+				<SegmentedControl.Item value="pp" class="flex-1">
 					<SegmentedControl.ItemText>Performance</SegmentedControl.ItemText>
 					<SegmentedControl.ItemHiddenInput />
 				</SegmentedControl.Item>
@@ -112,63 +115,65 @@
 				{/each}
 			</div>
 
-			<div class="h-full pl-10 custom-chart">
-				{#key activeTab}
-					<Chart
-						data={chartData}
-						x="date"
-						xScale={scaleTime()}
-						y={activeTab === 'plays' ? 'monthlyPlays' : 'cumulativePp'}
-						yDomain={[0, yAxisTop]}
-						padding={{ left: 8, bottom: 24, right: 16, top: 16 }}
-						tooltip={{ mode: 'bisect-x' }}
-					>
-						<Svg>
-							<Axis
-								placement="left"
-								grid
-								rule
-								classes={{
-									rule: 'stroke-[#4A4A4A]',
-									tick: 'stroke-[#4A4A4A]',
-									tickLabel: 'fill-transparent'
-								}}
-							/>
-							<Axis
-								placement="bottom"
-								format={(d) => format(d, 'MMM yy')}
-								rule
-								classes={{
-									rule: 'stroke-[#4A4A4A]',
-									tick: 'stroke-[#4A4A4A]',
-									tickLabel: 'fill-gray-400 text-xs'
-								}}
-							/>
-
-							<Spline
-								stroke={lineColor}
-								stroke-width="2"
-								class="fill-none transition-colors duration-300"
-							/>
-							<Highlight points={{ fill: lineColor, r: 3 }} lines />
-						</Svg>
-
-						<Tooltip.Root let:data>
-							<Tooltip.Header class="font-bold text-white mb-1">
-								{format(data.date, 'MMMM yyyy')}
-							</Tooltip.Header>
-							<Tooltip.List>
-								<Tooltip.Item
-									label={activeTab === 'plays' ? 'Monthly Plays' : 'Total PP'}
-									value={activeTab === 'plays'
-										? data.monthlyPlays
-										: `${Math.round(data.cumulativePp).toLocaleString()} pp`}
-									color={lineColor}
+			<div class="h-full pl-10 custom-chart" bind:clientHeight={containerHeight}>
+				{#if containerHeight > 0}
+					{#key activeTab}
+						<Chart
+							data={chartData}
+							x="date"
+							xScale={scaleTime()}
+							y={activeTab === 'plays' ? 'monthlyPlays' : 'cumulativePp'}
+							yDomain={[0, yAxisTop]}
+							padding={{ left: 8, bottom: 24, right: 16, top: 16 }}
+							tooltip={{ mode: 'bisect-x' }}
+						>
+							<Svg>
+								<Axis
+									placement="left"
+									grid
+									rule
+									classes={{
+										rule: 'stroke-[#4A4A4A]',
+										tick: 'stroke-[#4A4A4A]',
+										tickLabel: 'fill-transparent'
+									}}
 								/>
-							</Tooltip.List>
-						</Tooltip.Root>
-					</Chart>
-				{/key}
+								<Axis
+									placement="bottom"
+									format={(d) => format(d, 'MMM yy')}
+									rule
+									classes={{
+										rule: 'stroke-[#4A4A4A]',
+										tick: 'stroke-[#4A4A4A]',
+										tickLabel: 'fill-gray-400 text-xs'
+									}}
+								/>
+
+								<Spline
+									stroke={lineColor}
+									stroke-width="2"
+									class="fill-none transition-colors duration-300"
+								/>
+								<Highlight points={{ fill: lineColor, r: 3 }} lines />
+							</Svg>
+
+							<Tooltip.Root let:data>
+								<Tooltip.Header class="font-bold text-white mb-1">
+									{format(data.date, 'MMMM yyyy')}
+								</Tooltip.Header>
+								<Tooltip.List>
+									<Tooltip.Item
+										label={activeTab === 'plays' ? 'Monthly Plays' : 'Total PP'}
+										value={activeTab === 'plays'
+											? data.monthlyPlays
+											: `${Math.round(data.cumulativePp).toLocaleString()} pp`}
+										color={lineColor}
+									/>
+								</Tooltip.List>
+							</Tooltip.Root>
+						</Chart>
+					{/key}
+				{/if}
 			</div>
 		</div>
 
