@@ -14,14 +14,14 @@
 	import { formatRelativeTime } from '$lib/utils/time';
 	import { tooltip } from '$lib/actions/tooltip';
 	import TimelineChart from '$lib/components/users/analytics/TimelineChart.svelte';
-	import type { Play } from '$lib/models/play';
+	import type { ApiPlay } from '$lib/models/play';
 	import { getColorFromRank } from '$lib/utils/colors';
 
 	let {
 		scanner,
 		totalPlayCount = 0,
 		top50Plays = []
-	}: { scanner: PlayerAnalyticsScanner; totalPlayCount?: number; top50Plays?: Play[] } = $props();
+	}: { scanner: PlayerAnalyticsScanner; totalPlayCount?: number; top50Plays?: ApiPlay[] } = $props();
 
 	let open = $state(false);
 
@@ -108,10 +108,10 @@
 	);
 
 	let rankedFirstsCount = $derived(
-		scanner.stats.firstPlaces.filter((fp) => Number(fp.pp) > 0).length
+		scanner.stats.firstPlaces.filter((fp) => Number(fp.MapPP) > 0).length
 	);
 	let unrankedFirstsCount = $derived(
-		scanner.stats.firstPlaces.filter((fp) => Number(fp.pp) <= 0).length
+		scanner.stats.firstPlaces.filter((fp) => Number(fp.MapPP) <= 0).length
 	);
 
 	let hits300 = $derived(scanner.stats.hits.perfect + scanner.stats.hits.geki);
