@@ -2,14 +2,18 @@
 	import { scaleTime } from 'd3-scale';
 	import { format } from 'date-fns';
 	import { Axis, Chart, Highlight, Spline, Svg, Tooltip } from 'layerchart';
+	import { SegmentedControl } from '@skeletonlabs/skeleton-svelte';
 	import type { AnalyticsStats } from '$lib/stores/analyticsScanner.svelte';
 
 	let { stats }: { stats: AnalyticsStats } = $props();
+
+	let activeTab = $state<'plays' | 'pp'>('plays');
 
 	type ChartPoint = {
 		date: Date;
 		month: string;
 		monthlyPlays: number;
+		cumulativePp: number;
 		timestamp: number;
 	};
 
@@ -28,12 +32,15 @@
 				date: dateObj,
 				month,
 				monthlyPlays: monthlyPlays[month] || 0,
+				cumulativePp: entry.cumulativePp,
 				timestamp: entry.date * 1000
 			};
 		});
 	});
 
-	let maxMonthlyPlays = $derived(Math.max(0, ...chartData.map((d) => d.monthlyPlays)));
+	let maxValue = $derived(
+		Math.max(0, ...chartData.map((d) => (activeTab === 'plays' ? d.monthlyPlays : d.cumulativePp)))
+	);
 
 	function niceStep(max: number, targetTicks = 4) {
 		if (max <= 0) return 10;
@@ -48,12 +55,12 @@
 	}
 
 	let yAxisTop = $derived.by(() => {
-		const step = niceStep(maxMonthlyPlays, 4);
-		return Math.max(step, Math.ceil(maxMonthlyPlays / step) * step);
+		const step = niceStep(maxValue, 4);
+		return Math.max(step, Math.ceil(maxValue / step) * step);
 	});
 
 	let yTickLabels = $derived.by(() => {
-		const step = niceStep(maxMonthlyPlays, 4);
+		const step = niceStep(maxValue, 4);
 		const ticks = [];
 
 		for (let i = yAxisTop; i > 0; i -= step) {
@@ -63,10 +70,33 @@
 
 		return ticks.map((v) => Math.max(0, v).toLocaleString());
 	});
+
+	let lineColor = $derived(activeTab === 'plays' ? '#6366f1' : '#ec4899');
 </script>
 
 <div class="bg-[#2A2A2A] rounded-lg">
-	<h3 class="text-sm font-semibold text-gray-300 mb-4">Progression Timeline</h3>
+	<div
+		class="flex flex-col phone-sm:flex-row justify-between items-start phone-sm:items-center gap-4 mb-4"
+	>
+		<h3 class="text-sm font-semibold text-gray-300">Progression Timeline</h3>
+
+		<SegmentedControl
+			value={activeTab}
+			onValueChange={(details) => (activeTab = details.value as 'plays' | 'pp')}
+		>
+			<SegmentedControl.Control>
+				<SegmentedControl.Indicator />
+				<SegmentedControl.Item value="plays">
+					<SegmentedControl.ItemText>Playcount</SegmentedControl.ItemText>
+					<SegmentedControl.ItemHiddenInput />
+				</SegmentedControl.Item>
+				<SegmentedControl.Item value="pp">
+					<SegmentedControl.ItemText>Performance</SegmentedControl.ItemText>
+					<SegmentedControl.ItemHiddenInput />
+				</SegmentedControl.Item>
+			</SegmentedControl.Control>
+		</SegmentedControl>
+	</div>
 
 	{#if chartData.length > 0}
 		<div
@@ -82,12 +112,12 @@
 				{/each}
 			</div>
 
-			<div class="h-full pl-10">
+			<div class="h-full pl-10 custom-chart">
 				<Chart
 					data={chartData}
 					x="date"
 					xScale={scaleTime()}
-					y="monthlyPlays"
+					y={activeTab === 'plays' ? 'monthlyPlays' : 'cumulativePp'}
 					yDomain={[0, yAxisTop]}
 					padding={{ left: 8, bottom: 24, right: 16, top: 16 }}
 					tooltip={{ mode: 'bisect-x' }}
@@ -103,7 +133,6 @@
 								tickLabel: 'fill-transparent'
 							}}
 						/>
-
 						<Axis
 							placement="bottom"
 							format={(d) => format(d, 'MMM yy')}
@@ -115,9 +144,12 @@
 							}}
 						/>
 
-						<Spline y={(d) => d.monthlyPlays} stroke="#6366f1" class="fill-none" />
-
-						<Highlight y={(d) => d.monthlyPlays} points={{ fill: '#818cf8', r: 3 }} lines />
+						<Spline
+							stroke={lineColor}
+							stroke-width="2"
+							class="fill-none transition-colors duration-300"
+						/>
+						<Highlight points={{ fill: lineColor, r: 3 }} lines />
 					</Svg>
 
 					<Tooltip.Root let:data>
@@ -125,7 +157,13 @@
 							{format(data.date, 'MMMM yyyy')}
 						</Tooltip.Header>
 						<Tooltip.List>
-							<Tooltip.Item label="Monthly Plays" value={data.monthlyPlays} color="#818cf8" />
+							<Tooltip.Item
+								label={activeTab === 'plays' ? 'Monthly Plays' : 'Total PP'}
+								value={activeTab === 'plays'
+									? data.monthlyPlays
+									: `${Math.round(data.cumulativePp).toLocaleString()} pp`}
+								color={lineColor}
+							/>
 						</Tooltip.List>
 					</Tooltip.Root>
 				</Chart>
@@ -134,8 +172,20 @@
 
 		<div class="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-[#3C3C3C]">
 			<div>
-				<p class="text-xs text-gray-400 mb-1">Total Plays</p>
-				<p class="text-lg font-bold text-blue-400">{stats.playCount.toLocaleString()}</p>
+				<p class="text-xs text-gray-400 mb-1">
+					{activeTab === 'plays' ? 'Total Plays' : 'Total PP'}
+				</p>
+				<p
+					class="text-lg font-bold {activeTab === 'plays'
+						? 'text-indigo-400'
+						: 'text-pink-400'} transition-colors duration-300"
+				>
+					{#if activeTab === 'plays'}
+						{stats.playCount.toLocaleString()}
+					{:else}
+						{Math.round(chartData[chartData.length - 1]?.cumulativePp || 0).toLocaleString()} pp
+					{/if}
+				</p>
 			</div>
 			<div>
 				<p class="text-xs text-gray-400 mb-1">Months Tracked</p>

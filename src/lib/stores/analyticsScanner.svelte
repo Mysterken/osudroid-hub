@@ -1,9 +1,10 @@
 <script module lang="ts">
 	import { untrack } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { convertTitleToBeatmapMetadata } from '$lib/utils/playUtils';
 	import type { BeatmapScore } from '$lib/models/beatmapScore';
 	import { playUtils } from '$lib/utils/playUtils';
+	import type { Play } from '$lib/models/play';
 
 	const API_BASE_URL = 'https://new.osudroid.moe/api2/frontend';
 	const DB_NAME = 'osudroid_hub_analytics';
@@ -116,7 +117,7 @@
 		private previousWorkingStatus: 'scraping_profile' | 'scanning_firsts' | null = null;
 		private nextRequestTime = 0;
 
-		private rawPpPlays: { date: number; pp: number }[] = [];
+		private rawPpPlays: { hash: string; date: number; pp: number }[] = [];
 
 		constructor(uid: number) {
 			this.uid = uid;
@@ -222,7 +223,7 @@
 			}
 		}
 
-		async start(forceRestart = false, mode: ScanMode = this.mode) {
+		async start(forceRestart = false, mode: ScanMode = this.mode, top50Plays: Play[] = []) {
 			if (['scraping_profile', 'scanning_firsts', 'rate_limited'].includes(this.status)) return;
 
 			if (forceRestart || this.status === 'done' || this.status === 'failed') {
@@ -275,23 +276,71 @@
 
 				// PP Timeline
 				if (this.rawPpPlays.length > 0) {
-					// Sort chronologically
+					// Inject player's top play directly into the rawPpPlays array
+					for (const topPlay of top50Plays) {
+						if (topPlay.MapPP && topPlay.PlayedDate && topPlay.Hash) {
+							this.rawPpPlays.push({
+								hash: String(topPlay.Hash).toLowerCase().trim(),
+								date: Math.floor(new Date(topPlay.PlayedDate).getTime() / 1000),
+								pp: topPlay.MapPP
+							});
+						}
+					}
+
+					// Sort plays chronologically
 					this.rawPpPlays.sort((a, b) => a.date - b.date);
 
-					let currentTotalPp = 0;
 					this.stats.ppTimeline = [];
 
-					// Accumulate the PP
+					const bestPlays = new SvelteMap<string, number>();
+					let currentMonthStr = '';
+
+					// Track the user's running ranked playcount through time
+					let runningPlayCount = 0;
+
 					for (const play of this.rawPpPlays) {
-						currentTotalPp += play.pp;
+						const dateObj = new Date(play.date * 1000);
+						const playMonth = dateObj.toISOString().slice(0, 7);
+
+						if (currentMonthStr !== '' && currentMonthStr !== playMonth) {
+							const monthUnix = new Date(`${currentMonthStr}-01T00:00:00Z`).getTime() / 1000;
+
+							this.stats.ppTimeline.push({
+								date: monthUnix,
+								cumulativePp: playUtils.calculateTotalPP(
+									Array.from(bestPlays.values()),
+									runningPlayCount
+								)
+							});
+						}
+
+						currentMonthStr = playMonth;
+
+						// Increment by 1 for every ranked play processed
+						runningPlayCount++;
+
+						// Only update the map if this score is better than their previous score on it
+						const normalizedHash = String(play.hash).toLowerCase().trim();
+						const currentBest = bestPlays.get(normalizedHash) || 0;
+						if (play.pp > currentBest) {
+							bestPlays.set(normalizedHash, play.pp);
+						}
+					}
+
+					// Push the final month's result
+					if (currentMonthStr !== '') {
+						const monthUnix = new Date(`${currentMonthStr}-01T00:00:00Z`).getTime() / 1000;
+
 						this.stats.ppTimeline.push({
-							date: play.date,
-							cumulativePp: currentTotalPp
+							date: monthUnix,
+							cumulativePp: playUtils.calculateTotalPP(
+								Array.from(bestPlays.values()),
+								runningPlayCount
+							)
 						});
 					}
 
-					// Clear the raw array to save memory
-					this.rawPpPlays = [];
+					this.rawPpPlays = []; // Clear memory
 				}
 
 				// Phase 2: Verify #1 scores (deep scan only)
@@ -402,9 +451,8 @@
 				this.stats.mods[modKey].avgPp =
 					this.stats.mods[modKey].totalPp / this.stats.mods[modKey].ppCount;
 
-				// Stash the PP for timeline processing later
-				if (play.date) {
-					this.rawPpPlays.push({ date: play.date, pp: play.pp });
+				if (play.date && play.hash) {
+					this.rawPpPlays.push({ hash: play.hash, date: play.date, pp: play.pp });
 				}
 			}
 

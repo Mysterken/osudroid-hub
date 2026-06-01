@@ -174,7 +174,10 @@
 			user = loadedUser;
 
 			if (user?.Top50Plays) {
-				simulatedPP = playUtils.getSimulatedPerformancePoints(user.Top50Plays);
+				simulatedPP = playUtils.getSimulatedPerformancePoints(
+					user.Top50Plays,
+					user.OverallPlaycount
+				);
 
 				beatmaps.clear();
 				await fetchBeatmapsInRange(user.Top50Plays, 0, 5);
@@ -261,7 +264,11 @@
 					country={user.Region}
 				/>
 				{#if scanner}
-					<AnalyticsDashboard {scanner} totalPlayCount={user.OverallPlaycount} />
+					<AnalyticsDashboard
+						{scanner}
+						totalPlayCount={user.OverallPlaycount}
+						top50Plays={user.Top50Plays}
+					/>
 				{/if}
 				<TopPlays
 					topPlays={user.Top50Plays}
@@ -305,7 +312,11 @@
 				{lastLogin}
 			/>
 			{#if scanner}
-				<AnalyticsDashboard {scanner} totalPlayCount={user.OverallPlaycount} />
+				<AnalyticsDashboard
+					{scanner}
+					totalPlayCount={user.OverallPlaycount}
+					top50Plays={user.Top50Plays}
+				/>
 			{/if}
 			<TopPlays
 				topPlays={user.Top50Plays}

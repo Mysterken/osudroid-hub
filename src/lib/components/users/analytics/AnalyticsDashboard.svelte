@@ -17,11 +17,13 @@
 	import { tooltip } from '$lib/actions/tooltip';
 	import { resolve } from '$app/paths';
 	import TimelineChart from '$lib/components/users/analytics/TimelineChart.svelte';
+	import type { Play } from '$lib/models/play';
 
 	let {
 		scanner: initialScanner,
-		totalPlayCount = 0
-	}: { scanner: PlayerAnalyticsScanner; totalPlayCount?: number } = $props();
+		totalPlayCount = 0,
+		top50Plays = []
+	}: { scanner: PlayerAnalyticsScanner; totalPlayCount?: number; top50Plays?: Play[] } = $props();
 
 	let scanner = $derived(initialScanner);
 	let showUnranked = $state(false);
@@ -164,7 +166,7 @@
 					type="button"
 					onclick={() => {
 						open = true;
-						scanner.start(true, 'quick');
+						scanner.start(true, 'quick', top50Plays);
 					}}
 					class="btn preset-tonal-secondary w-full phone-sm:flex-1 tablet-sm:w-auto py-2 rounded-lg text-sm font-medium transition-all hover:preset-filled-secondary-500 flex items-center justify-center gap-2 min-w-0 shrink-0"
 					title="Scan recent plays quickly"
@@ -175,7 +177,7 @@
 					type="button"
 					onclick={() => {
 						open = true;
-						scanner.start(true, 'deep');
+						scanner.start(true, 'deep', top50Plays);
 					}}
 					class="btn preset-filled-primary-500 w-full phone-sm:flex-1 tablet-sm:w-auto py-2 rounded-lg text-sm font-bold shadow-md shadow-pink-500/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 min-w-0 shrink-0"
 					title="Thoroughly scan entire history"
