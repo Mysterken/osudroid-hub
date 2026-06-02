@@ -27,17 +27,7 @@
 		</div>
 
 		<div class="bg-[#2A2A2A] rounded-2xl p-6 tablet-sm:p-8">
-			<article
-				class="prose prose-invert max-w-none
-            prose-h1:text-3xl prose-h1:font-bold prose-h1:text-white prose-h1:mb-4
-            prose-h2:text-2xl prose-h2:font-bold prose-h2:text-white prose-h2:mt-8 prose-h2:mb-4 prose-h2:pb-2 prose-h2:border-b prose-h2:border-gray-700
-            prose-h3:text-xl prose-h3:font-semibold prose-h3:text-pink-400 prose-h3:mt-6 prose-h3:mb-3
-            prose-h4:text-lg prose-h4:font-semibold prose-h4:text-gray-300 prose-h4:mt-4 prose-h4:mb-2
-            prose-ul:list-disc prose-ul:list-inside prose-ul:space-y-2 prose-ul:text-gray-300 prose-ul:ml-4
-            prose-p:text-gray-400 prose-p:leading-relaxed prose-p:mb-4
-            prose-a:text-blue-400 hover:prose-a:underline
-            prose-code:bg-[#1A1A1A] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-pink-400 prose-code:text-sm prose-code:before:content-none prose-code:after:content-none"
-			>
+			<article class="changelog-prose prose prose-invert max-w-none">
 				<ChangelogContent />
 			</article>
 		</div>
@@ -45,3 +35,32 @@
 </ContentLayout>
 
 <Footer />
+
+<style lang="postcss">
+	@reference "../../app.css";
+
+	:global(.changelog-prose h1) {
+		@apply text-3xl font-bold text-white mb-4;
+	}
+	:global(.changelog-prose h2) {
+		@apply text-2xl font-bold text-white mt-8 mb-4 pb-2 border-b border-gray-700;
+	}
+	:global(.changelog-prose h3) {
+		@apply text-xl font-semibold text-pink-400 mt-6 mb-3;
+	}
+	:global(.changelog-prose h4) {
+		@apply text-lg font-semibold text-gray-300 mt-4 mb-2;
+	}
+	:global(.changelog-prose ul) {
+		@apply list-disc list-inside space-y-2 text-gray-300 ml-4;
+	}
+	:global(.changelog-prose p) {
+		@apply text-gray-400 leading-relaxed mb-4;
+	}
+	:global(.changelog-prose a) {
+		@apply text-blue-400 hover:underline;
+	}
+	:global(.changelog-prose code) {
+		@apply bg-[#1A1A1A] px-1.5 py-0.5 rounded text-pink-400 text-sm;
+	}
+</style>
