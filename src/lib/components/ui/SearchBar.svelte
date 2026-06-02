@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LoaderCircle, Search, TrophyIcon } from 'lucide-svelte';
+	import { LoaderCircle, Search, TrophyIcon } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { toaster } from '$lib/utils/toaster';

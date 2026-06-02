@@ -6,7 +6,7 @@
 	import LeaderboardTable from '$lib/components/leaderboard/LeaderboardTable.svelte';
 	import LeaderboardRow from '$lib/components/leaderboard/LeaderboardRow.svelte';
 	import LeaderboardCard from '$lib/components/leaderboard/LeaderboardCard.svelte';
-	import { TrophyIcon } from 'lucide-svelte';
+	import { TrophyIcon } from '@lucide/svelte';
 	import type { LeaderboardPlayer } from '$lib/services/leaderboardService';
 	import type { FilterDef } from '$lib/components/leaderboard/LeaderboardFilters.svelte';
 	import { page } from '$app/state';

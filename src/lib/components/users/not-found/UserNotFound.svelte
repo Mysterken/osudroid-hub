@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CircleAlert } from 'lucide-svelte';
+	import { CircleAlert } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 </script>
 

@@ -8,7 +8,7 @@
 		SquareIcon,
 		TargetIcon,
 		ZapIcon
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { PlayerAnalyticsScanner } from '$lib/stores/analyticsScanner.svelte';
 	import { Collapsible } from '@skeletonlabs/skeleton-svelte';
 	import { formatRelativeTime } from '$lib/utils/time';

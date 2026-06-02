@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TrophyIcon, PlayIcon, SquareIcon, ExternalLinkIcon } from 'lucide-svelte';
+	import { TrophyIcon, PlayIcon, SquareIcon, ExternalLinkIcon } from '@lucide/svelte';
 	import { playUtils } from '$lib/utils/playUtils';
 	import { getDifficultyColor } from '$lib/utils/colors';
 	import type { BeatmapExtended, Beatmapset } from '$lib/models/osuApi/beatmap';

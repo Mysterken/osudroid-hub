@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDownIcon } from 'lucide-svelte';
+	import { ChevronDownIcon } from '@lucide/svelte';
 	import { tooltip } from '$lib/actions/tooltip';
 	import { playUtils } from '$lib/utils/playUtils';
 	import ModIcon from '$lib/components/ui/ModIcon.svelte';

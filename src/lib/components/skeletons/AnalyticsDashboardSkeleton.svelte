@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChartNoAxesColumn, ChevronDownIcon } from 'lucide-svelte';
+	import { ChartNoAxesColumn, ChevronDownIcon } from '@lucide/svelte';
 </script>
 
 <div class="w-full bg-[#1E1E1E] border border-[#3C3C3C] rounded-xl text-white overflow-hidden">

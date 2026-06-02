@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '$lib/actions/tooltip';
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { InfoIcon } from 'lucide-svelte';
+	import { InfoIcon } from '@lucide/svelte';
 	import { timeAgo } from '$lib/utils/time';
 
 	let { registered, lastLogin }: { registered: string | null; lastLogin: string | null } = $props();

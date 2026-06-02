@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tooltip } from '$lib/actions/tooltip';
-	import { ChevronDownIcon } from 'lucide-svelte';
+	import { ChevronDownIcon } from '@lucide/svelte';
 	import { playUtils } from '$lib/utils/playUtils';
 	import LetterRank from '$lib/components/ui/LetterRank.svelte';
 	import type { BeatmapExtended } from '$lib/models/osuApi/beatmap';

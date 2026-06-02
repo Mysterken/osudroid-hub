@@ -8,7 +8,7 @@
 		TrophyIcon,
 		ActivityIcon,
 		MapIcon
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { SegmentedControl } from '@skeletonlabs/skeleton-svelte';
 	import { convertTitleToBeatmapMetadata, playUtils } from '$lib/utils/playUtils';
 

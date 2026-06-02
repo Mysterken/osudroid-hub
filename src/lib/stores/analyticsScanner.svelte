@@ -392,27 +392,50 @@
 		}
 
 		private mapBeatmapScoreToApiPlay(top: BeatmapScore): ApiPlay {
+			const {
+				hash = '',
+				filename = '',
+				accuracy = 0,
+				bad = 0,
+				combo = 0,
+				geki = 0,
+				good = 0,
+				katu = 0,
+				miss = 0,
+				pp = 0,
+				perfect = 0,
+				mark,
+				score = 0,
+				mods,
+				date,
+				id = 0,
+				sliderEndHit = 0,
+				sliderHeadHit = 0,
+				sliderRepeatHit = 0,
+				sliderTickHit = 0
+			} = top;
+
 			return {
-				Hash: top.hash || '',
-				Filename: top.filename || '',
-				MapAccuracy: top.accuracy || 0,
-				MapBad: top.bad || 0,
-				MapCombo: top.combo || 0,
-				MapGeki: top.geki || 0,
-				MapGood: top.good || 0,
-				MapKatu: top.katu || 0,
-				MapMiss: top.miss || 0,
-				MapPP: top.pp || 0,
-				MapPerfect: top.perfect || 0,
-				MapRank: top.mark || 'S',
-				MapScore: top.score || 0,
-				Mods: top.mods || 'NM',
-				PlayedDate: top.date ? new Date(top.date * 1000).toISOString() : '',
-				ScoreId: top.id || 0,
-				SliderEndHit: top.sliderEndHit || 0,
-				SliderHeadHit: top.sliderHeadHit || 0,
-				SliderRepeatHit: top.sliderRepeatHit || 0,
-				SliderTickHit: top.sliderTickHit || 0
+				Hash: hash,
+				Filename: filename,
+				MapAccuracy: accuracy,
+				MapBad: bad,
+				MapCombo: combo,
+				MapGeki: geki,
+				MapGood: good,
+				MapKatu: katu,
+				MapMiss: miss,
+				MapPP: pp,
+				MapPerfect: perfect,
+				MapRank: mark || 'S',
+				MapScore: score,
+				Mods: mods || 'NM',
+				PlayedDate: date ? new Date(date * 1000).toISOString() : '',
+				ScoreId: id,
+				SliderEndHit: sliderEndHit,
+				SliderHeadHit: sliderHeadHit,
+				SliderRepeatHit: sliderRepeatHit,
+				SliderTickHit: sliderTickHit
 			};
 		}
 

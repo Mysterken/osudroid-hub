@@ -3,7 +3,7 @@
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import ContentLayout from '$lib/components/layouts/ContentLayout.svelte';
 	import Footer from '$lib/components/layouts/Footer.svelte';
-	import { AlertCircleIcon } from 'lucide-svelte';
+	import { AlertCircleIcon } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 
 	let status = page.status;

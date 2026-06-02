@@ -1,4 +1,4 @@
-import { Medal } from 'lucide-svelte';
+import { Medal } from '@lucide/svelte';
 import type { Component } from 'svelte';
 
 export const AVATAR_BASE_URL = 'https://osudroid.moe/user/avatar?id=';

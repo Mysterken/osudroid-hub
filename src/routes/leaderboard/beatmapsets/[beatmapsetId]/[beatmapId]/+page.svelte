@@ -10,7 +10,7 @@
 	import LeaderboardTable from '$lib/components/leaderboard/LeaderboardTable.svelte';
 	import LeaderboardFilters from '$lib/components/leaderboard/LeaderboardFilters.svelte';
 	import type { FilterDef } from '$lib/components/leaderboard/LeaderboardFilters.svelte';
-	import { CircleAlertIcon } from 'lucide-svelte';
+	import { CircleAlertIcon } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import type { BeatmapExtended, Beatmapset } from '$lib/models/osuApi/beatmap';
@@ -227,6 +227,7 @@
 		if (fetchController) fetchController.abort();
 		fetchController = new AbortController();
 		const signal = fetchController.signal;
+
 		isScoresLoading = true;
 		scoresError = null;
 
@@ -234,32 +235,43 @@
 			const url = `/api/leaderboard/beatmaps/${beatmap.checksum}?order=${order}&page=${currentPage}`;
 			const data = await fetchWithLocalCache(url, { signal }, { ttlMs: 5 * 60 * 1000 });
 
-			if (!signal.aborted) {
-				scores = Array.isArray(data) ? data : [];
+			if (signal.aborted) return;
 
-				if (isHashBeatmap && scores.length > 0 && scores[0].filename && !beatmapset?.id) {
-					const meta = convertTitleToBeatmapMetadata(scores[0].filename);
-					if (beatmapset) {
-						beatmapset = {
-							...beatmapset,
-							title: meta.songTitle || beatmapset.title,
-							artist: meta.songArtist || beatmapset.artist,
-							creator: meta.mapper || beatmapset.creator
-						} as Beatmapset;
-					}
-					if (beatmap) {
-						beatmap = {
-							...beatmap,
-							version: meta.difficulty || beatmap.version
-						} as BeatmapExtended;
-					}
-				}
-			}
+			scores = Array.isArray(data) ? data : [];
+
+			reconstructFallbackMetadataIfNeeded();
 		} catch (err) {
 			if (err instanceof Error && err.name === 'AbortError') return;
 			scoresError = 'An error occurred while loading scores.';
 		} finally {
-			if (!fetchController?.signal.aborted) isScoresLoading = false;
+			if (!fetchController?.signal.aborted) {
+				isScoresLoading = false;
+			}
+		}
+	}
+
+	function reconstructFallbackMetadataIfNeeded(): void {
+		// Early return guard clause flattens the logic entirely
+		if (!isHashBeatmap || scores.length === 0 || !scores[0].filename || beatmapset?.id) {
+			return;
+		}
+
+		const meta = convertTitleToBeatmapMetadata(scores[0].filename);
+
+		if (beatmapset) {
+			beatmapset = {
+				...beatmapset,
+				title: meta.songTitle || beatmapset.title,
+				artist: meta.songArtist || beatmapset.artist,
+				creator: meta.mapper || beatmapset.creator
+			} as Beatmapset;
+		}
+
+		if (beatmap) {
+			beatmap = {
+				...beatmap,
+				version: meta.difficulty || beatmap.version
+			} as BeatmapExtended;
 		}
 	}
 

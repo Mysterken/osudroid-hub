@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '$lib/actions/tooltip';
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { ChartPieIcon } from 'lucide-svelte';
+	import { ChartPieIcon } from '@lucide/svelte';
 
 	let {
 		source,

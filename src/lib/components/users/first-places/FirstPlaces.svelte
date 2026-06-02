@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { SearchIcon, SquareIcon, LoaderCircleIcon, CrownIcon } from 'lucide-svelte';
+	import { SearchIcon, SquareIcon, LoaderCircleIcon, CrownIcon } from '@lucide/svelte';
 	import { Switch } from '@skeletonlabs/skeleton-svelte';
 	import LetterRank from '$lib/components/ui/LetterRank.svelte';
 	import { tooltip } from '$lib/actions/tooltip';
