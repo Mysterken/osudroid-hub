@@ -214,9 +214,11 @@
 {#snippet simpleList(items: [string, number][])}
 	<ul class="space-y-1">
 		{#each items as [name, count] (name)}
-			<li class="flex justify-between text-xs">
-				<span class="text-white truncate pr-2" title={name}>{name}</span>
-				<span class="text-gray-500 font-mono shrink-0">{count}x</span>
+			<li class="flex items-center justify-between text-xs gap-2 overflow-hidden">
+				<div class="text-scroll-container min-w-0 grow">
+					<span class="text-scroll-content text-white" title={name}>{name}</span>
+				</div>
+				<span class="text-gray-500 font-mono shrink-0 pl-1">{count}x</span>
 			</li>
 		{/each}
 	</ul>
@@ -263,7 +265,7 @@
 		</div>
 	</div>
 
-	<Collapsible.Content class="p-6 pt-0 border-t border-[#3C3C3C]">
+	<Collapsible.Content class="w-full p-6 pt-0 border-t border-[#3C3C3C]">
 		<div class="pt-6">
 			{@render progressBar()}
 

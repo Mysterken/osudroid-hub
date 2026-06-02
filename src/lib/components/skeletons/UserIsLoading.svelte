@@ -16,7 +16,6 @@
 		<RankingPanelSkeleton />
 		<StatisticsPanelSkeleton />
 		<UserInfoPanelSkeleton />
-
 	</div>
 
 	<!-- Main Content -->

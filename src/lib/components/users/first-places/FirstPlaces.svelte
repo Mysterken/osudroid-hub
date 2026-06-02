@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { TrophyIcon, SearchIcon, SquareIcon, LoaderCircleIcon } from 'lucide-svelte';
+	import { SearchIcon, SquareIcon, LoaderCircleIcon, CrownIcon } from 'lucide-svelte';
 	import { Switch } from '@skeletonlabs/skeleton-svelte';
 	import LetterRank from '$lib/components/ui/LetterRank.svelte';
 	import { tooltip } from '$lib/actions/tooltip';
@@ -88,7 +88,7 @@
 		class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 tablet-sm:gap-4 w-full"
 	>
 		<div class="flex items-center gap-2 tablet-sm:gap-3 shrink-0">
-			<TrophyIcon class="tablet-sm:size-8 text-yellow-400" />
+			<CrownIcon class="tablet-sm:size-8 text-yellow-400" />
 			<h1 class="font-bold text-lg text-white whitespace-nowrap">First Place Ranks</h1>
 
 			{#if scanner.stats.firstPlaces.length > 0}
@@ -254,7 +254,7 @@
 			<div
 				class="text-center py-10 flex flex-col items-center gap-4 bg-[#1E1E1E] rounded-lg border border-[#3C3C3C]/50"
 			>
-				<TrophyIcon size={36} class="text-gray-600 mb-1" />
+				<CrownIcon size={36} class="text-gray-600 mb-1" />
 				<div class="space-y-1">
 					<p class="text-white font-bold text-sm">#1 Leaderboard Verification Required</p>
 					<p class="text-gray-400 text-xs max-w-sm mx-auto">
