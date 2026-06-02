@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Search Bar Enhancements:** Upgraded the global search bar to support beatmap hashes and robust parsing of osu! links. It now utilizes SvelteKit's client-side router (`goto`) for significantly faster navigation.
 - **Metadata Parsing:** Improved `convertTitleToBeatmapMetadata` for much more robust and accurate song title parsing.
 - **Total PP Estimation:** Made overall performance point calculations much more accurate by properly factoring in bonus PP.
-- **UI & Codebase Refinements:** Centralized rank coloring utilities (e.g., `getColorFromRank`) for consistency, updated core dependencies (`svelte`, `eslint`, `vitest`), and introduced `layerchart` & `d3-scale` for the new dashboard visualizations.
+- **UI & Codebase Refinements:** Centralized rank coloring utilities (e.g., `getColorFromRank`) for consistency, updated core dependencies (`svelte`, `eslint`, `vitest`), and introduced `apexcharts` & `d3-scale` for the new dashboard visualizations.
 
 <br>
 
