@@ -223,169 +223,25 @@
 			const signal = this.abortController.signal;
 
 			try {
-				// Phase 1: Scrape user's plays
-				this.status = 'scraping_profile';
 				const potentialFirstPlaces = new SvelteSet<string>();
-				const seenHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.Hash));
 
-				let page = this.pagesFetched;
+				const validHashes = this.stats.firstPlaces
+					.map((r) => r.Hash)
+					.filter((h): h is string => !!h);
 
-				while (true) {
-					if (signal.aborted) return;
+				const existingHashes = new SvelteSet<string>(validHashes);
 
-					const res = await this.fetchWithRateLimit(
-						`${API_BASE_URL}/score-search?uid=${this.uid}&page=${page}`,
-						signal
-					);
-					const data: BeatmapScore[] = await res.json();
+				// Phase 1: Scrape user's plays
+				await this.scrapeProfile(signal, potentialFirstPlaces, existingHashes);
+				if (signal.aborted) return;
 
-					if (!Array.isArray(data) || !data.length) break;
+				// Phase 1.5: Build PP Timeline
+				this.buildPPTimeline(top50Plays);
 
-					for (const play of data) {
-						this.aggregatePlay(play);
-
-						if (play.hash) {
-							const h = String(play.hash).toLowerCase();
-							if (seenHashes.has(h)) {
-								this.stats.duplicateHashes = (this.stats.duplicateHashes || 0) + 1;
-							} else {
-								seenHashes.add(h);
-								potentialFirstPlaces.add(h);
-							}
-						}
-					}
-
-					this.pagesFetched = page + 1;
-					this.saveState();
-					if (data.length < 100) break;
-					page++;
-				}
-
-				// PP Timeline
-				if (this.rawPpPlays.length > 0) {
-					// Inject player's top play directly into the rawPpPlays array
-					for (const topPlay of top50Plays) {
-						if (topPlay.MapPP && topPlay.PlayedDate && topPlay.Hash) {
-							this.rawPpPlays.push({
-								hash: String(topPlay.Hash).toLowerCase().trim(),
-								date: Math.floor(new Date(topPlay.PlayedDate).getTime() / 1000),
-								pp: topPlay.MapPP
-							});
-						}
-					}
-
-					// Sort plays chronologically
-					this.rawPpPlays.sort((a, b) => a.date - b.date);
-
-					this.stats.ppTimeline = [];
-
-					const bestPlays = new SvelteMap<string, number>();
-					let currentMonthStr = '';
-
-					// Track the user's running ranked playcount through time
-					let runningPlayCount = 0;
-
-					for (const play of this.rawPpPlays) {
-						const dateObj = new Date(play.date * 1000);
-						const playMonth = dateObj.toISOString().slice(0, 7);
-
-						if (currentMonthStr !== '' && currentMonthStr !== playMonth) {
-							const monthUnix = new Date(`${currentMonthStr}-01T00:00:00Z`).getTime() / 1000;
-
-							this.stats.ppTimeline.push({
-								date: monthUnix,
-								cumulativePp: playUtils.calculateTotalPP(
-									Array.from(bestPlays.values()),
-									runningPlayCount
-								)
-							});
-						}
-
-						currentMonthStr = playMonth;
-
-						// Increment by 1 for every ranked play processed
-						runningPlayCount++;
-
-						// Only update the map if this score is better than their previous score on it
-						const normalizedHash = String(play.hash).toLowerCase().trim();
-						const currentBest = bestPlays.get(normalizedHash) || 0;
-						if (play.pp > currentBest) {
-							bestPlays.set(normalizedHash, play.pp);
-						}
-					}
-
-					// Push the final month's result
-					if (currentMonthStr !== '') {
-						const monthUnix = new Date(`${currentMonthStr}-01T00:00:00Z`).getTime() / 1000;
-
-						this.stats.ppTimeline.push({
-							date: monthUnix,
-							cumulativePp: playUtils.calculateTotalPP(
-								Array.from(bestPlays.values()),
-								runningPlayCount
-							)
-						});
-					}
-
-					this.rawPpPlays = []; // Clear memory
-				}
-
-				// Phase 2: Verify #1 scores (deep scan only)
+				// Phase 2: Verify #1 scores
 				if (this.mode === 'deep') {
-					this.status = 'scanning_firsts';
-					const existingHashes = new SvelteSet(this.stats.firstPlaces.map((r) => r.Hash));
-					const hashesToCheck = Array.from(potentialFirstPlaces).filter(
-						(h) => !existingHashes.has(h)
-					);
-
-					this.hashesTotal = this.stats.firstPlaces.length + hashesToCheck.length;
-					this.hashesChecked = this.stats.firstPlaces.length;
-					this.saveState();
-
-					for (const hash of hashesToCheck) {
-						if (signal.aborted) return;
-
-						try {
-							const res = await this.fetchWithRateLimit(
-								`${API_BASE_URL}/score-search?hash=${hash}&order=score&page=0`,
-								signal
-							);
-							const leaderboard: BeatmapScore[] = await res.json();
-							const top = Array.isArray(leaderboard) ? leaderboard[0] : null;
-
-							if (top && String(top.uid) === String(this.uid) && !existingHashes.has(hash)) {
-								this.stats.firstPlaces.push({
-									Hash: top.hash || '',
-									Filename: top.filename || '',
-									MapAccuracy: top.accuracy || 0,
-									MapBad: top.bad || 0,
-									MapCombo: top.combo || 0,
-									MapGeki: top.geki || 0,
-									MapGood: top.good || 0,
-									MapKatu: top.katu || 0,
-									MapMiss: top.miss || 0,
-									MapPP: top.pp || 0,
-									MapPerfect: top.perfect || 0,
-									MapRank: top.mark || 'S',
-									MapScore: top.score || 0,
-									Mods: top.mods || 'NM',
-									PlayedDate: top.date ? new Date(top.date * 1000).toISOString() : '',
-									ScoreId: top.id || 0,
-									SliderEndHit: top.sliderEndHit || 0,
-									SliderHeadHit: top.sliderHeadHit || 0,
-									SliderRepeatHit: top.sliderRepeatHit || 0,
-									SliderTickHit: top.sliderTickHit || 0
-								});
-								existingHashes.add(hash);
-							}
-						} catch (err) {
-							console.error(`Failed to check hash ${hash}`, err);
-						}
-						this.hashesChecked++;
-						this.saveState();
-					}
+					await this.verifyFirstPlaces(signal, potentialFirstPlaces, existingHashes);
 				} else {
-					// Quick scan: do not verify per-hash leaderboard ranks
 					this.hashesTotal = 0;
 					this.hashesChecked = 0;
 					this.saveState();
@@ -394,75 +250,261 @@
 				if (signal.aborted) return;
 				this.status = 'done';
 			} catch (err: unknown) {
-				if (err instanceof Error && err.name === 'AbortError') {
-					this.status = 'idle';
-				} else {
-					this.status = 'failed';
-					this.error = err instanceof Error ? err.message : 'Unknown error';
-				}
+				this.handleScanError(err);
 			} finally {
 				this.rateLimitCountdown = 0;
 				this.saveState();
 			}
 		}
 
+		private async scrapeProfile(
+			signal: AbortSignal,
+			potentialFirstPlaces: SvelteSet<string>,
+			existingHashes: SvelteSet<string>
+		) {
+			this.status = 'scraping_profile';
+			const seenHashes = new SvelteSet(existingHashes);
+			let page = this.pagesFetched;
+
+			while (true) {
+				if (signal.aborted) return;
+
+				const res = await this.fetchWithRateLimit(
+					`${API_BASE_URL}/score-search?uid=${this.uid}&page=${page}`,
+					signal
+				);
+				const data: BeatmapScore[] = await res.json();
+
+				if (!Array.isArray(data) || !data.length) break;
+
+				for (const play of data) {
+					this.aggregatePlay(play);
+
+					if (play.hash) {
+						const h = String(play.hash).toLowerCase();
+						if (seenHashes.has(h)) {
+							this.stats.duplicateHashes = (this.stats.duplicateHashes || 0) + 1;
+						} else {
+							seenHashes.add(h);
+							potentialFirstPlaces.add(h);
+						}
+					}
+				}
+
+				this.pagesFetched = page + 1;
+				this.saveState();
+				if (data.length < 100) break;
+				page++;
+			}
+		}
+
+		private buildPPTimeline(top50Plays: Play[]) {
+			if (this.rawPpPlays.length === 0) return;
+
+			// Inject player's top play directly into the rawPpPlays array
+			for (const topPlay of top50Plays) {
+				if (topPlay.MapPP && topPlay.PlayedDate && topPlay.Hash) {
+					this.rawPpPlays.push({
+						hash: String(topPlay.Hash).toLowerCase().trim(),
+						date: Math.floor(new Date(topPlay.PlayedDate).getTime() / 1000),
+						pp: topPlay.MapPP
+					});
+				}
+			}
+
+			this.rawPpPlays.sort((a, b) => a.date - b.date);
+			this.stats.ppTimeline = [];
+
+			const bestPlays = new SvelteMap<string, number>();
+			let currentMonthStr = '';
+			let runningPlayCount = 0;
+
+			for (const play of this.rawPpPlays) {
+				const dateObj = new Date(play.date * 1000);
+				const playMonth = dateObj.toISOString().slice(0, 7);
+
+				if (currentMonthStr !== '' && currentMonthStr !== playMonth) {
+					this.pushTimelineMonth(currentMonthStr, bestPlays, runningPlayCount);
+				}
+
+				currentMonthStr = playMonth;
+				runningPlayCount++;
+
+				const normalizedHash = String(play.hash).toLowerCase().trim();
+				const currentBest = bestPlays.get(normalizedHash) || 0;
+				if (play.pp > currentBest) {
+					bestPlays.set(normalizedHash, play.pp);
+				}
+			}
+
+			if (currentMonthStr !== '') {
+				this.pushTimelineMonth(currentMonthStr, bestPlays, runningPlayCount);
+			}
+
+			this.rawPpPlays = []; // Clear memory
+		}
+
+		private pushTimelineMonth(
+			monthStr: string,
+			bestPlays: SvelteMap<string, number>,
+			playCount: number
+		) {
+			const monthUnix = new Date(`${monthStr}-01T00:00:00Z`).getTime() / 1000;
+			this.stats.ppTimeline.push({
+				date: monthUnix,
+				cumulativePp: playUtils.calculateTotalPP(Array.from(bestPlays.values()), playCount)
+			});
+		}
+
+		private async verifyFirstPlaces(
+			signal: AbortSignal,
+			potentialFirstPlaces: SvelteSet<string>,
+			existingHashes: SvelteSet<string>
+		) {
+			this.status = 'scanning_firsts';
+			const hashesToCheck = Array.from(potentialFirstPlaces).filter((h) => !existingHashes.has(h));
+
+			this.hashesTotal = this.stats.firstPlaces.length + hashesToCheck.length;
+			this.hashesChecked = this.stats.firstPlaces.length;
+			this.saveState();
+
+			for (const hash of hashesToCheck) {
+				if (signal.aborted) return;
+
+				try {
+					const res = await this.fetchWithRateLimit(
+						`${API_BASE_URL}/score-search?hash=${hash}&order=score&page=0`,
+						signal
+					);
+					const leaderboard: BeatmapScore[] = await res.json();
+					const top = Array.isArray(leaderboard) ? leaderboard[0] : null;
+
+					if (top && String(top.uid) === String(this.uid) && !existingHashes.has(hash)) {
+						this.stats.firstPlaces.push(this.mapBeatmapScoreToApiPlay(top));
+						existingHashes.add(hash);
+					}
+				} catch (err) {
+					console.error(`Failed to check hash ${hash}`, err);
+				}
+				this.hashesChecked++;
+				this.saveState();
+			}
+		}
+
+		private mapBeatmapScoreToApiPlay(top: BeatmapScore): ApiPlay {
+			return {
+				Hash: top.hash || '',
+				Filename: top.filename || '',
+				MapAccuracy: top.accuracy || 0,
+				MapBad: top.bad || 0,
+				MapCombo: top.combo || 0,
+				MapGeki: top.geki || 0,
+				MapGood: top.good || 0,
+				MapKatu: top.katu || 0,
+				MapMiss: top.miss || 0,
+				MapPP: top.pp || 0,
+				MapPerfect: top.perfect || 0,
+				MapRank: top.mark || 'S',
+				MapScore: top.score || 0,
+				Mods: top.mods || 'NM',
+				PlayedDate: top.date ? new Date(top.date * 1000).toISOString() : '',
+				ScoreId: top.id || 0,
+				SliderEndHit: top.sliderEndHit || 0,
+				SliderHeadHit: top.sliderHeadHit || 0,
+				SliderRepeatHit: top.sliderRepeatHit || 0,
+				SliderTickHit: top.sliderTickHit || 0
+			};
+		}
+
+		private handleScanError(err: unknown) {
+			if (err instanceof Error && err.name === 'AbortError') {
+				this.status = 'idle';
+			} else {
+				this.status = 'failed';
+				this.error = err instanceof Error ? err.message : 'Unknown error';
+			}
+		}
+
 		private aggregatePlay(play: BeatmapScore) {
 			this.stats.playCount++;
 
-			if (this.stats.grades[play.mark] !== undefined) {
-				this.stats.grades[play.mark]++;
-			}
+			this.aggregateGrade(play.mark);
+			this.aggregateRecords(play);
+			this.aggregateHits(play);
+			this.aggregateModsAndPP(play);
+			this.aggregateTimeline(play.date);
+			this.aggregateMetadata(play.filename);
+		}
 
+		// Extracted Aggregation Helpers
+
+		private aggregateGrade(mark: string) {
+			if (this.stats.grades[mark] !== undefined) {
+				this.stats.grades[mark]++;
+			}
+		}
+
+		private aggregateRecords(play: BeatmapScore) {
 			if (play.combo > this.stats.maxCombo) {
 				this.stats.maxCombo = play.combo;
 				this.stats.maxComboPlay = play;
 			}
 
-			if (play.score !== undefined && play.score !== null) {
+			// Using != null checks for both null and undefined safely
+			if (play.score != null) {
 				if (!this.stats.highestScore || play.score > (this.stats.highestScore.score || 0)) {
 					this.stats.highestScore = play;
 				}
 			}
+		}
 
+		private aggregateHits(play: BeatmapScore) {
 			this.stats.hits.perfect += play.perfect || 0;
 			this.stats.hits.geki += play.geki || 0;
 			this.stats.hits.good += play.good || 0;
 			this.stats.hits.katu += play.katu || 0;
 			this.stats.hits.bad += play.bad || 0;
 			this.stats.hits.miss += play.miss || 0;
+		}
 
+		private aggregateModsAndPP(play: BeatmapScore) {
 			const modKey = playUtils.parseModsArray(play.mods).join('') || 'NM';
+
+			// Initialize if it doesn't exist yet
 			if (!this.stats.mods[modKey]) {
 				this.stats.mods[modKey] = { count: 0, ppCount: 0, totalPp: 0, avgPp: 0 };
 			}
 
-			this.stats.mods[modKey].count++;
+			const modStats = this.stats.mods[modKey];
+			modStats.count++;
 
 			if (play.pp && play.pp > 0) {
-				this.stats.mods[modKey].ppCount++;
-				this.stats.mods[modKey].totalPp += play.pp;
-				this.stats.mods[modKey].avgPp =
-					this.stats.mods[modKey].totalPp / this.stats.mods[modKey].ppCount;
+				modStats.ppCount++;
+				modStats.totalPp += play.pp;
+				modStats.avgPp = modStats.totalPp / modStats.ppCount;
 
 				if (play.date && play.hash) {
 					this.rawPpPlays.push({ hash: play.hash, date: play.date, pp: play.pp });
 				}
 			}
+		}
 
-			if (play.date) {
-				const month = new Date(play.date * 1000).toISOString().slice(0, 7);
-				this.stats.timeline[month] = (this.stats.timeline[month] || 0) + 1;
+		private aggregateTimeline(date?: number) {
+			if (!date) return;
+			const month = new Date(date * 1000).toISOString().slice(0, 7);
+			this.stats.timeline[month] = (this.stats.timeline[month] || 0) + 1;
+		}
+
+		private aggregateMetadata(filename?: string) {
+			if (!filename) return;
+
+			const { songArtist, mapper } = convertTitleToBeatmapMetadata(filename);
+
+			if (songArtist.trim()) {
+				this.stats.artists[songArtist] = (this.stats.artists[songArtist] || 0) + 1;
 			}
-
-			if (play.filename) {
-				const { songArtist, mapper } = convertTitleToBeatmapMetadata(play.filename);
-
-				if (songArtist.trim()) {
-					this.stats.artists[songArtist] = (this.stats.artists[songArtist] || 0) + 1;
-				}
-				if (mapper.trim()) {
-					this.stats.mappers[mapper] = (this.stats.mappers[mapper] || 0) + 1;
-				}
+			if (mapper.trim()) {
+				this.stats.mappers[mapper] = (this.stats.mappers[mapper] || 0) + 1;
 			}
 		}
 

@@ -14,6 +14,7 @@ WORKDIR /app
 
 COPY package.json yarn.lock ./
 RUN yarn install --production
+RUN yarn cache clean --force
 
 COPY --from=builder /app/build ./build
 

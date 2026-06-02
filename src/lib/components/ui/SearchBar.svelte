@@ -49,50 +49,61 @@
 			throw new Error('Please enter a valid Beatmap ID, beatmap hash, or osu! link.');
 		}
 
-		// Hash fallback
+		// Route 1: Hash Resolution
 		if (hash) {
-			try {
-				const res = await fetch(`/api/beatmaps/${hash}`);
-				if (res.ok) {
-					const data = await res.json();
-					return {
-						setId: String(data.beatmapset_id ?? 0),
-						mapId: String(data.id ?? hash)
-					};
-				}
-			} catch (err) {
-				console.warn('API unreachable, falling back to local hash routing.', err);
-			}
-
-			// Client-Side Safety Net: Route directly to Fallback Mode
-			return { setId: '0', mapId: hash };
+			return resolveFromHash(hash);
 		}
 
-		let resolvedSetId = setId;
-		let resolvedMapId = mapId;
-
-		// If we only have the Map ID, fetch map details to find its parent Set ID
+		// Route 2: Missing Set ID (Fetch parent set)
 		if (mapId && !setId) {
-			const res = await fetch(`/api/beatmaps/${mapId}`);
-			if (!res.ok) throw new Error('Beatmap not found on the server.');
-			const data = await res.json();
-			resolvedSetId = String(data.beatmapset_id);
+			return { setId: await fetchSetIdFromMapId(mapId), mapId };
 		}
 
-		// If we only have a Set ID, default to first available difficulty
+		// Route 3: Missing Map ID (Default to first difficulty)
 		if (setId && !mapId) {
-			const res = await fetch(`/api/beatmapset/${setId}`);
-			if (!res.ok) throw new Error('Beatmapset not found on the server.');
-			const data = await res.json();
-
-			if (data.beatmaps && data.beatmaps.length > 0) {
-				resolvedMapId = String(data.beatmaps[0].id);
-			} else {
-				throw new Error('This beatmapset contains no maps.');
-			}
+			return { setId, mapId: await fetchFirstMapIdFromSet(setId) };
 		}
 
-		return { setId: resolvedSetId, mapId: resolvedMapId };
+		// Route 4: We already have both IDs perfectly parsed
+		return { setId, mapId };
+	}
+
+	async function resolveFromHash(hash: string) {
+		try {
+			const res = await fetch(`/api/beatmaps/${hash}`);
+			if (res.ok) {
+				const data = await res.json();
+				return {
+					setId: String(data.beatmapset_id ?? 0),
+					mapId: String(data.id ?? hash)
+				};
+			}
+		} catch (err) {
+			console.warn('API unreachable, falling back to local hash routing.', err);
+		}
+
+		// Client-Side Safety Net
+		return { setId: '0', mapId: hash };
+	}
+
+	async function fetchSetIdFromMapId(mapId: string): Promise<string> {
+		const res = await fetch(`/api/beatmaps/${mapId}`);
+		if (!res.ok) throw new Error('Beatmap not found on the server.');
+
+		const data = await res.json();
+		return String(data.beatmapset_id);
+	}
+
+	async function fetchFirstMapIdFromSet(setId: string): Promise<string> {
+		const res = await fetch(`/api/beatmapset/${setId}`);
+		if (!res.ok) throw new Error('Beatmapset not found on the server.');
+
+		const data = await res.json();
+		if (data.beatmaps && data.beatmaps.length > 0) {
+			return String(data.beatmaps[0].id);
+		}
+
+		throw new Error('This beatmapset contains no maps.');
 	}
 
 	async function handleSearch(event: KeyboardEvent) {

@@ -10,13 +10,7 @@
 	import LeaderboardTable from '$lib/components/leaderboard/LeaderboardTable.svelte';
 	import LeaderboardFilters from '$lib/components/leaderboard/LeaderboardFilters.svelte';
 	import type { FilterDef } from '$lib/components/leaderboard/LeaderboardFilters.svelte';
-	import {
-		TrophyIcon,
-		ExternalLinkIcon,
-		PlayIcon,
-		SquareIcon,
-		CircleAlertIcon
-	} from 'lucide-svelte';
+	import { CircleAlertIcon } from 'lucide-svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import type { BeatmapExtended, Beatmapset } from '$lib/models/osuApi/beatmap';
@@ -30,12 +24,15 @@
 	import { playUtils, convertTitleToBeatmapMetadata } from '$lib/utils/playUtils';
 	import defaultAvatarImg from '$lib/assets/default/avatar.webp';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { getDifficultyColor } from '$lib/utils/colors';
 	import { fetchWithLocalCache } from '$lib/utils/fetchWithLocalCache';
 	import { formatExactTime, formatRelativeTime } from '$lib/utils/time';
+	import BeatmapHeader from '$lib/components/leaderboard/BeatmapHeader.svelte';
 
+	const CACHE_TTL_1H = 60 * 60 * 1000;
 	const SCORES_PER_PAGE = 100;
 	const MD5_REGEX = /^[a-fA-F0-9]{32}$/i;
+
+	let headerRef = $state<ReturnType<typeof BeatmapHeader>>();
 
 	// Route Parameters
 	const beatmapsetId = $derived(parseInt(page.params.beatmapsetId ?? '0', 10));
@@ -58,12 +55,6 @@
 	let isScoresLoading = $state(true);
 	let beatmapsetError = $state<string | null>(null);
 	let scoresError = $state<string | null>(null);
-
-	// UI State
-	let hoveredBeatmap = $state<(typeof availableBeatmaps)[0] | null>(null);
-	let displayBeatmap = $derived(hoveredBeatmap || beatmap);
-	let audioEl = $state<HTMLAudioElement>();
-	let isPlaying = $state(false);
 
 	let fetchController: AbortController | null = null;
 
@@ -113,37 +104,29 @@
 		beatmapset?.beatmaps
 			?.filter((b) => b.mode === 'osu')
 			.sort((a, b) => a.difficulty_rating - b.difficulty_rating) ?? []
-	);
+	) as BeatmapExtended[];
 
-	// Helper Functions
-	function getStatusLabel(status: number): string {
-		const statusMap: Record<number, string> = {
-			'-2': 'Graveyard',
-			'-1': 'WIP',
-			'0': 'Pending',
-			'1': 'Ranked',
-			'2': 'Approved',
-			'3': 'Qualified',
-			'4': 'Loved'
-		};
-		return statusMap[status] || 'Unknown';
-	}
-
-	function getStatusColor(status: number): string {
-		const colorMap: Record<number, string> = {
-			'-2': 'text-gray-500',
-			'-1': 'text-gray-400',
-			'0': 'text-yellow-500',
-			'1': 'text-green-500',
-			'2': 'text-blue-500',
-			'3': 'text-cyan-500',
-			'4': 'text-pink-500'
-		};
-		return colorMap[status] || 'text-gray-400';
-	}
-
-	// Fetching Logic
 	async function fetchBeatmapset(): Promise<void> {
+		resetFetchState();
+		abortPreviousFetch();
+
+		try {
+			if (isHashBeatmap) {
+				await handleHashBeatmapFlow();
+			} else {
+				await handleStandardBeatmapFlow();
+			}
+		} catch (err) {
+			handleFetchError(err);
+		} finally {
+			isBeatmapsetLoading = false;
+			if (!beatmap?.checksum) {
+				isScoresLoading = false;
+			}
+		}
+	}
+
+	function resetFetchState(): void {
 		isBeatmapsetLoading = true;
 		isScoresLoading = true;
 		beatmapsetError = null;
@@ -152,102 +135,87 @@
 		beatmap = null;
 		beatmapset = null;
 		scores = [];
+	}
 
-		if (fetchController) {
-			try {
-				fetchController.abort();
-			} catch {
-				/* ignore */
-			}
-			fetchController = null;
-		}
-
+	function abortPreviousFetch(): void {
+		if (!fetchController) return;
 		try {
-			if (isHashBeatmap) {
-				// The API route already gracefully handles hashes and returns a mock beatmap if needed
-				const fallbackBeatmap = (await fetchWithLocalCache(
-					`/api/beatmaps/${beatmapParam}`,
-					undefined,
-					{
-						ttlMs: 60 * 60 * 1000
-					}
-				)) as BeatmapExtended;
-
-				beatmap = fallbackBeatmap;
-
-				// If we have a real beatmapset with a valid ID, fetch it for full content
-				if (
-					fallbackBeatmap.beatmapset_id &&
-					fallbackBeatmap.beatmapset_id > 0 &&
-					fallbackBeatmap.id
-				) {
-					const resJson = await fetchWithLocalCache(
-						`/api/beatmapset/${fallbackBeatmap.beatmapset_id}`,
-						undefined,
-						{
-							ttlMs: 60 * 60 * 1000
-						}
-					);
-					beatmapset = resJson as Beatmapset;
-					beatmapsetError = null;
-
-					// Replace URL with numeric IDs instead of hash
-					untrack(() => {
-						goto(
-							resolve(
-								`/leaderboard/beatmapsets/${fallbackBeatmap.beatmapset_id}/${fallbackBeatmap.id}`
-							),
-							{ replaceState: true }
-						);
-					});
-				} else {
-					// Wrap the standalone beatmap in a pseudo-beatmapset structure for the UI
-					beatmapset = {
-						id: 0,
-						title: fallbackBeatmap.beatmapset?.title ?? 'Unknown Title',
-						artist: fallbackBeatmap.beatmapset?.artist ?? 'Unknown Artist',
-						creator: fallbackBeatmap.beatmapset?.creator ?? 'Unknown Mapper',
-						status: -2,
-						covers: fallbackBeatmap.beatmapset?.covers ?? {},
-						preview_url: fallbackBeatmap.beatmapset?.preview_url ?? '',
-						beatmaps: [fallbackBeatmap]
-					} as Beatmapset;
-					beatmapsetError = null;
-				}
-				return;
-			}
-
-			// Standard Numeric ID flow
-			const resJson = await fetchWithLocalCache(`/api/beatmapset/${beatmapsetId}`, undefined, {
-				ttlMs: 60 * 60 * 1000
-			});
-
-			beatmapset = resJson as Beatmapset;
-			const found =
-				(beatmapset.beatmaps?.find((b) => b.id === numericBeatmapId) as BeatmapExtended) ?? null;
-
-			if (!found) {
-				beatmap = null;
-				beatmapsetError = 'Beatmap not found in beatmapset.';
-				return;
-			}
-
-			beatmap = found;
-			beatmapsetError = null;
-		} catch (err) {
-			beatmap = null;
-			beatmapset = null;
-			beatmapsetError =
-				err instanceof Error && /404/.test(err.message)
-					? 'Beatmapset not found.'
-					: 'An error occurred while loading beatmapset info.';
-			console.error('Error fetching beatmapset:', err);
-		} finally {
-			isBeatmapsetLoading = false;
-			if (!beatmap?.checksum) {
-				isScoresLoading = false;
-			}
+			fetchController.abort();
+		} catch {
+			/* ignore */
 		}
+		fetchController = null;
+	}
+
+	async function handleHashBeatmapFlow(): Promise<void> {
+		const fallbackBeatmap = (await fetchWithLocalCache(`/api/beatmaps/${beatmapParam}`, undefined, {
+			ttlMs: CACHE_TTL_1H
+		})) as BeatmapExtended;
+
+		beatmap = fallbackBeatmap;
+
+		if (fallbackBeatmap.beatmapset_id && fallbackBeatmap.beatmapset_id > 0 && fallbackBeatmap.id) {
+			beatmapset = (await fetchWithLocalCache(
+				`/api/beatmapset/${fallbackBeatmap.beatmapset_id}`,
+				undefined,
+				{ ttlMs: CACHE_TTL_1H }
+			)) as Beatmapset;
+
+			beatmapsetError = null;
+
+			untrack(() => {
+				goto(
+					resolve(
+						`/leaderboard/beatmapsets/${fallbackBeatmap.beatmapset_id}/${fallbackBeatmap.id}`
+					),
+					{ replaceState: true }
+				);
+			});
+		} else {
+			beatmapset = buildPseudoBeatmapset(fallbackBeatmap);
+			beatmapsetError = null;
+		}
+	}
+
+	async function handleStandardBeatmapFlow(): Promise<void> {
+		beatmapset = (await fetchWithLocalCache(`/api/beatmapset/${beatmapsetId}`, undefined, {
+			ttlMs: CACHE_TTL_1H
+		})) as Beatmapset;
+
+		const found =
+			(beatmapset.beatmaps?.find((b) => b.id === numericBeatmapId) as BeatmapExtended) ?? null;
+
+		if (!found) {
+			beatmap = null;
+			beatmapsetError = 'Beatmap not found in beatmapset.';
+			return;
+		}
+
+		beatmap = found;
+		beatmapsetError = null;
+	}
+
+	function buildPseudoBeatmapset(fallbackBeatmap: BeatmapExtended): Beatmapset {
+		return {
+			id: 0,
+			title: fallbackBeatmap.beatmapset?.title ?? 'Unknown Title',
+			artist: fallbackBeatmap.beatmapset?.artist ?? 'Unknown Artist',
+			creator: fallbackBeatmap.beatmapset?.creator ?? 'Unknown Mapper',
+			status: -2,
+			covers: fallbackBeatmap.beatmapset?.covers ?? {},
+			preview_url: fallbackBeatmap.beatmapset?.preview_url ?? '',
+			beatmaps: [fallbackBeatmap]
+		} as Beatmapset;
+	}
+
+	function handleFetchError(err: unknown): void {
+		beatmap = null;
+		beatmapset = null;
+		beatmapsetError =
+			err instanceof Error && /404/.test(err.message)
+				? 'Beatmapset not found.'
+				: 'An error occurred while loading beatmapset info.';
+		console.error('Error fetching beatmapset:', err);
 	}
 
 	async function fetchScores(): Promise<void> {
@@ -269,7 +237,6 @@
 			if (!signal.aborted) {
 				scores = Array.isArray(data) ? data : [];
 
-				// If this is a fallback map, reconstruct the Title, Artist, and Difficulty
 				if (isHashBeatmap && scores.length > 0 && scores[0].filename && !beatmapset?.id) {
 					const meta = convertTitleToBeatmapMetadata(scores[0].filename);
 					if (beatmapset) {
@@ -325,32 +292,14 @@
 
 	function handleDifficultyChange(newBeatmapId: number): void {
 		if (newBeatmapId === numericBeatmapId) return;
-		stopPreview();
+		headerRef?.stopPreview();
 		goto(resolve(`/leaderboard/beatmapsets/${beatmapsetId}/${newBeatmapId}`), {
 			invalidateAll: true
 		});
 	}
 
-	function playPreview(): void {
-		if (!audioEl) return;
-		if (isPlaying) {
-			audioEl.pause();
-			audioEl.currentTime = 0;
-		} else {
-			audioEl.play();
-		}
-		isPlaying = !isPlaying;
-	}
+	// --- Synchronization Effect ---
 
-	function stopPreview(): void {
-		if (audioEl) {
-			audioEl.pause();
-			audioEl.currentTime = 0;
-		}
-		isPlaying = false;
-	}
-
-	// Synchronization Effect
 	$effect(() => {
 		const currentSetId = beatmapsetId;
 		const currentMapParam = beatmapParam;
@@ -358,7 +307,7 @@
 
 		if (!Number.isNaN(currentSetId) && currentMapParam) {
 			untrack(() => {
-				stopPreview();
+				headerRef?.stopPreview();
 
 				currentPage = parseInt(page.url.searchParams.get('page') ?? '0', 10);
 				order = (page.url.searchParams.get('order') as 'score' | 'pp') ?? 'score';
@@ -372,7 +321,6 @@
 					return;
 				}
 
-				// Standard Difficulty Swap
 				if (
 					currentNumericMapId !== null &&
 					beatmapset?.beatmaps?.some((b) => b.id === currentNumericMapId)
@@ -404,11 +352,6 @@
 	<meta property="og:title" content={pageTitle} />
 </svelte:head>
 
-{#if beatmapset?.preview_url}
-	<audio bind:this={audioEl} src={beatmapset.preview_url} onended={() => (isPlaying = false)}
-	></audio>
-{/if}
-
 <SearchBar />
 
 <ContentLayout>
@@ -418,148 +361,14 @@
 				<div class="h-48 tablet-sm:h-64"></div>
 			</div>
 		{:else if beatmap && beatmapset}
-			<div
-				class="relative rounded-xl overflow-hidden bg-[#1E1E1E] border border-gray-800 flex flex-col"
-			>
-				{#if beatmapset.covers?.cover}
-					<div class="absolute inset-0 z-0">
-						<img
-							src={beatmapset.covers.cover}
-							alt="Beatmap background"
-							class="w-full h-full object-cover opacity-60 blur-sm"
-						/>
-						<div
-							class="absolute inset-0 bg-gradient-to-t from-[#1E1E1E] via-[#1E1E1E]/80 to-transparent"
-						></div>
-					</div>
-				{/if}
-
-				{#if availableBeatmaps.length > 0}
-					<div
-						class="relative z-10 w-full bg-black/40 border-b border-[#3C3C3C]/50 px-6 py-3 flex flex-col gap-2"
-					>
-						<div class="flex items-center gap-2 h-6">
-							<span class="text-sm font-bold text-white drop-shadow-md">
-								{displayBeatmap?.version ?? ''}
-							</span>
-							<span class="text-yellow-400 font-bold text-sm drop-shadow-md">
-								★ {displayBeatmap?.difficulty_rating?.toFixed(2) ?? '0.00'}
-							</span>
-						</div>
-
-						<div class="flex gap-1.5 overflow-x-auto no-scrollbar pl-1 py-1 items-center">
-							{#each availableBeatmaps as diff (diff.id)}
-								<button
-									type="button"
-									onmouseenter={() => (hoveredBeatmap = diff)}
-									onmouseleave={() => (hoveredBeatmap = null)}
-									onclick={() => handleDifficultyChange(diff.id)}
-									aria-label={diff.version}
-									class="size-[22px] shrink-0 rounded-full border-[2.5px] transition-all duration-200 {diff.id ===
-									numericBeatmapId
-										? 'border-white scale-110'
-										: 'border-transparent opacity-60 hover:opacity-100 hover:scale-110'}"
-									style="background-color: {getDifficultyColor(diff.difficulty_rating)};"
-								></button>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<div class="relative z-10 p-6 tablet-sm:p-8">
-					<div class="flex flex-col tablet-sm:flex-row gap-4 items-start">
-						{#if beatmapset.covers?.cover}
-							<img
-								src={beatmapset.covers.cover}
-								alt="Beatmap cover"
-								class="w-full tablet-sm:w-48 h-32 tablet-sm:h-32 object-cover rounded-lg shadow-lg shrink-0"
-							/>
-						{:else}
-							<div
-								class="w-full tablet-sm:w-48 h-32 rounded-lg bg-[#2A2A2A] flex items-center justify-center shrink-0"
-							>
-								<TrophyIcon size={48} class="text-gray-500" />
-							</div>
-						{/if}
-
-						<div class="flex-1 min-w-0 space-y-3">
-							<div>
-								<h1 class="text-3xl tablet-sm:text-4xl font-extrabold text-white leading-tight">
-									{beatmapset.title ?? 'Unknown Title'}
-								</h1>
-								<p class="text-gray-300 text-lg mt-1">
-									{beatmapset.artist ?? ''}
-								</p>
-								<p class="text-gray-400 text-sm mt-1">
-									mapped by <span class="text-white font-medium"
-										>{beatmapset.creator ?? 'Unknown'}</span
-									>
-								</p>
-							</div>
-
-							<div class="flex flex-wrap items-center gap-4 text-sm mt-2">
-								<span class="text-gray-300">
-									Length: <span class="text-white font-medium"
-										>{playUtils.formatLength(beatmap.total_length)}</span
-									>
-								</span>
-								<span class="text-gray-300">
-									BPM: <span class="text-white font-medium">{beatmap.bpm ?? 'N/A'}</span>
-								</span>
-								<span class="text-gray-300">
-									CS: <span class="text-white font-medium">{beatmap.cs}</span>
-								</span>
-								<span class="text-gray-300">
-									HP: <span class="text-white font-medium">{beatmap.drain}</span>
-								</span>
-								<span class="text-gray-300">
-									OD: <span class="text-white font-medium">{beatmap.accuracy}</span>
-								</span>
-								<span class="text-gray-300">
-									AR: <span class="text-white font-medium">{beatmap.ar}</span>
-								</span>
-								{#if beatmap.ranked !== undefined}
-									<div class="h-4 w-px bg-gray-600"></div>
-									<span
-										class="px-2 py-1 rounded text-xs font-bold {getStatusColor(
-											beatmap.ranked
-										)} bg-black/40 border border-current"
-									>
-										{getStatusLabel(beatmap.ranked)}
-									</span>
-								{/if}
-							</div>
-
-							<div class="flex flex-wrap items-center gap-3 mt-2">
-								{#if beatmapset.preview_url}
-									<button
-										type="button"
-										onclick={playPreview}
-										class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors"
-									>
-										{#if isPlaying}
-											<SquareIcon size={16} /> Stop Preview
-										{:else}
-											<PlayIcon size={16} /> Play Preview
-										{/if}
-									</button>
-								{/if}
-								{#if beatmap.url}
-									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-									<a href={beatmap.url} target="_blank" rel="noopener noreferrer">
-										<button
-											type="button"
-											class="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-sm font-semibold transition-colors"
-										>
-											View on osu! <ExternalLinkIcon size={16} />
-										</button>
-									</a>
-								{/if}
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
+			<BeatmapHeader
+				bind:this={headerRef}
+				{beatmap}
+				{beatmapset}
+				{availableBeatmaps}
+				{numericBeatmapId}
+				onDifficultyChange={handleDifficultyChange}
+			/>
 		{:else if beatmapsetError}
 			<div class="flex flex-col items-center gap-2 my-8 text-red-400">
 				<CircleAlertIcon size={48} />
