@@ -1,23 +1,21 @@
 <script lang="ts">
-	import { scaleTime } from 'd3-scale';
-	import { format } from 'date-fns';
-	import { Axis, Chart, Highlight, Spline, Svg, Tooltip } from 'layerchart';
+	import { browser } from '$app/environment';
 	import { SegmentedControl } from '@skeletonlabs/skeleton-svelte';
 	import type { AnalyticsStats } from '$lib/stores/analyticsScanner.svelte';
+
+	// 🌟 FIX 1: Import ApexOptions AND the default ApexCharts class specifically as types!
+	import type { ApexOptions } from 'apexcharts';
+	import type ApexCharts from 'apexcharts';
 
 	let { stats }: { stats: AnalyticsStats } = $props();
 
 	let activeTab = $state<'plays' | 'pp'>('plays');
+	let chartContainer = $state<HTMLElement | null>(null);
 
-	type ChartPoint = {
-		date: Date;
-		month: string;
-		monthlyPlays: number;
-		cumulativePp: number;
-		timestamp: number;
-	};
+	// 🌟 FIX 1: Apply the strict type instead of 'any'
+	let chartInstance: ApexCharts | null = null;
 
-	let chartData = $derived.by<ChartPoint[]>(() => {
+	let seriesData = $derived.by(() => {
 		const monthlyPlays: Record<string, number> = {};
 
 		Object.entries(stats.timeline).forEach(([month, count]) => {
@@ -27,60 +25,100 @@
 		return stats.ppTimeline.map((entry) => {
 			const dateObj = new Date(entry.date * 1000);
 			const month = dateObj.toISOString().slice(0, 7);
+			const plays = monthlyPlays[month] || 0;
 
 			return {
-				date: dateObj,
-				month,
-				monthlyPlays: monthlyPlays[month] || 0,
-				cumulativePp: entry.cumulativePp,
-				timestamp: entry.date * 1000
+				x: dateObj.getTime(),
+				y: activeTab === 'plays' ? plays : Math.round(entry.cumulativePp)
 			};
 		});
 	});
 
-	let maxValue = $derived(
-		Math.max(0, ...chartData.map((d) => (activeTab === 'plays' ? d.monthlyPlays : d.cumulativePp)))
-	);
+	$effect(() => {
+		if (!browser || !chartContainer || seriesData.length === 0) return;
 
-	function niceStep(max: number, targetTicks = 4) {
-		if (max <= 0) return 10;
-		const raw = max / targetTicks;
-		const magnitude = 10 ** Math.floor(Math.log10(raw));
-		const normalized = raw / magnitude;
+		let isMounted = true;
 
-		if (normalized <= 1) return magnitude;
-		if (normalized <= 2) return 2 * magnitude;
-		if (normalized <= 5) return 5 * magnitude;
-		return 10 * magnitude;
-	}
+		const color = activeTab === 'plays' ? '#6366f1' : '#ec4899';
+		const name = activeTab === 'plays' ? 'Monthly Plays' : 'Total PP';
 
-	let yAxisTop = $derived.by(() => {
-		const step = niceStep(maxValue, 4);
-		return Math.max(step, Math.ceil(maxValue / step) * step);
+		const options: ApexOptions = {
+			series: [{ name, data: seriesData }],
+			chart: {
+				type: 'area',
+				height: 300,
+				background: 'transparent',
+				toolbar: { show: false },
+				animations: {
+					enabled: true,
+					speed: 800,
+					dynamicAnimation: {
+						enabled: true,
+						speed: 350
+					}
+				}
+			},
+			colors: [color],
+			fill: {
+				type: 'gradient',
+				gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] }
+			},
+			dataLabels: { enabled: false },
+			stroke: { curve: 'smooth', width: 3 },
+			xaxis: {
+				type: 'datetime',
+				axisBorder: { show: false },
+				axisTicks: { show: false },
+				labels: { style: { colors: '#9ca3af', fontSize: '11px' } },
+				tooltip: { enabled: false }
+			},
+			yaxis: {
+				labels: { style: { colors: '#9ca3af', fontSize: '11px' } }
+			},
+			grid: {
+				borderColor: '#3C3C3C',
+				strokeDashArray: 4,
+				xaxis: { lines: { show: true } },
+				yaxis: { lines: { show: true } },
+				padding: { top: 0, right: 0, bottom: 0, left: 10 }
+			},
+			theme: { mode: 'dark' },
+			tooltip: {
+				theme: 'dark',
+				x: { format: 'MMM yyyy' }
+			}
+		};
+
+		import('apexcharts').then((module) => {
+			// 🌟 FIX 2: Re-narrow the type by checking if chartContainer is still valid asynchronously
+			if (!isMounted || !chartContainer) return;
+
+			const ApexChartsDynamic = module.default;
+
+			if (chartInstance) {
+				chartInstance.updateOptions(options);
+			} else {
+				// TypeScript now guarantees chartContainer is exactly HTMLElement!
+				chartInstance = new ApexChartsDynamic(chartContainer, options);
+				chartInstance.render();
+			}
+		});
+
+		return () => {
+			isMounted = false;
+			if (chartInstance) {
+				chartInstance.destroy();
+				chartInstance = null;
+			}
+		};
 	});
-
-	let yTickLabels = $derived.by(() => {
-		const step = niceStep(maxValue, 4);
-		const ticks = [];
-
-		for (let i = yAxisTop; i > 0; i -= step) {
-			ticks.push(i);
-		}
-		ticks.push(0);
-
-		return ticks.map((v) => Math.max(0, v).toLocaleString());
-	});
-
-	let lineColor = $derived(activeTab === 'plays' ? '#6366f1' : '#ec4899');
-
-	let containerHeight = $state(0);
 </script>
 
-<div class="bg-[#2A2A2A] rounded-lg">
+<div class="bg-[#1E1E1E] border border-[#3C3C3C] rounded-xl p-6 w-full">
 	<div
 		class="flex flex-col tablet-sm:flex-row justify-between items-start tablet-sm:items-center gap-4 mb-4 w-full"
 	>
-		<h3 class="text-sm font-semibold text-gray-300 shrink-0">Progression Timeline</h3>
+		<h3 class="text-xl font-bold text-white shrink-0">Progression Timeline</h3>
 
 		<SegmentedControl
 			value={activeTab}
@@ -101,80 +139,9 @@
 		</SegmentedControl>
 	</div>
 
-	{#if chartData.length > 0}
-		<div
-			class="w-full bg-[#1E1E1E] rounded-lg relative border border-[#303030]"
-			style="height: 300px;"
-		>
-			<div
-				class="absolute left-0 top-4 bottom-6 w-12 pointer-events-none flex flex-col justify-between pl-3"
-				aria-hidden="true"
-			>
-				{#each yTickLabels as tick, i (`tick-${i}`)}
-					<span class="text-[11px] text-gray-300 leading-none">{tick}</span>
-				{/each}
-			</div>
-
-			<div class="h-full pl-10 custom-chart" bind:clientHeight={containerHeight}>
-				{#if containerHeight > 0}
-					{#key activeTab}
-						<Chart
-							data={chartData}
-							x="date"
-							xScale={scaleTime()}
-							y={activeTab === 'plays' ? 'monthlyPlays' : 'cumulativePp'}
-							yDomain={[0, yAxisTop]}
-							padding={{ left: 8, bottom: 24, right: 16, top: 16 }}
-							tooltip={{ mode: 'bisect-x' }}
-						>
-							<Svg>
-								<Axis
-									placement="left"
-									grid
-									rule
-									classes={{
-										rule: 'stroke-[#4A4A4A]',
-										tick: 'stroke-[#4A4A4A]',
-										tickLabel: 'fill-transparent'
-									}}
-								/>
-								<Axis
-									placement="bottom"
-									format={(d) => format(d, 'MMM yy')}
-									rule
-									classes={{
-										rule: 'stroke-[#4A4A4A]',
-										tick: 'stroke-[#4A4A4A]',
-										tickLabel: 'fill-gray-400 text-xs'
-									}}
-								/>
-
-								<Spline
-									stroke={lineColor}
-									stroke-width="2"
-									class="fill-none transition-colors duration-300"
-								/>
-								<Highlight points={{ fill: lineColor, r: 3 }} lines />
-							</Svg>
-
-							<Tooltip.Root let:data>
-								<Tooltip.Header class="font-bold text-white mb-1">
-									{format(data.date, 'MMMM yyyy')}
-								</Tooltip.Header>
-								<Tooltip.List>
-									<Tooltip.Item
-										label={activeTab === 'plays' ? 'Monthly Plays' : 'Total PP'}
-										value={activeTab === 'plays'
-											? data.monthlyPlays
-											: `${Math.round(data.cumulativePp).toLocaleString()} pp`}
-										color={lineColor}
-									/>
-								</Tooltip.List>
-							</Tooltip.Root>
-						</Chart>
-					{/key}
-				{/if}
-			</div>
+	{#if seriesData.length > 0}
+		<div class="w-full bg-[#2A2A2A] rounded-lg border border-[#303030] p-2 min-h-[300px]">
+			<div bind:this={chartContainer}></div>
 		</div>
 
 		<div class="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-[#3C3C3C]">
@@ -190,18 +157,14 @@
 					{#if activeTab === 'plays'}
 						{stats.playCount.toLocaleString()}
 					{:else}
-						{Math.round(chartData[chartData.length - 1]?.cumulativePp || 0).toLocaleString()} pp
+						{Math.round(seriesData[seriesData.length - 1]?.y || 0).toLocaleString()} pp
 					{/if}
 				</p>
 			</div>
 			<div>
 				<p class="text-xs text-gray-400 mb-1">Months Tracked</p>
-				<p class="text-lg font-bold text-white">{new Set(chartData.map((d) => d.month)).size}</p>
+				<p class="text-lg font-bold text-white">{new Set(seriesData.map((d) => d.x)).size}</p>
 			</div>
-		</div>
-	{:else}
-		<div class="text-center py-8 text-gray-500 text-sm">
-			No timeline data available. Complete a scan to see your progression.
 		</div>
 	{/if}
 </div>

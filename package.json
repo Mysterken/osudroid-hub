@@ -24,7 +24,6 @@
 		"@sveltejs/kit": "^2.61.1",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@tailwindcss/forms": "^0.5.11",
-		"@types/d3-scale": "^4",
 		"eslint": "^10.4.1",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.19.0",
@@ -45,16 +44,12 @@
 		"@inlang/paraglide-js": "^2.18.2",
 		"@lucide/svelte": "^1.17.0",
 		"@tailwindcss/vite": "^4.3.0",
+		"apexcharts": "^5.13.0",
 		"axios": "^1.16.1",
 		"cheerio": "^1.2.0",
 		"crawler-user-agents": "^1.50.0",
-		"d3-scale": "^4.0.2",
 		"flag-icons": "^7.5.0",
-		"layerchart": "^1.0.13",
 		"pino": "^10.3.1",
 		"tailwindcss": "^4.3.0"
-	},
-	"resolutions": {
-		"ip-address": "^10.2.0"
 	}
 }
