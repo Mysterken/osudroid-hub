@@ -6,6 +6,8 @@
 	import UserInfoPanelSkeleton from '$lib/components/skeletons/UserInfoPanelSkeleton.svelte';
 	import ProfileInfoDesktopSkeleton from '$lib/components/skeletons/ProfileInfoDesktopSkeleton.svelte';
 	import ProfileInfoMobileSkeleton from '$lib/components/skeletons/ProfileInfoMobileSkeleton.svelte';
+	import AnalyticsDashboardSkeleton from '$lib/components/skeletons/AnalyticsDashboardSkeleton.svelte';
+	import FirstPlacesSkeleton from '$lib/components/skeletons/FirstPlacesSkeleton.svelte';
 </script>
 
 <div class="hidden desktop-sm:grid grid-cols-[1fr_3fr] gap-8">
@@ -14,13 +16,16 @@
 		<RankingPanelSkeleton />
 		<StatisticsPanelSkeleton />
 		<UserInfoPanelSkeleton />
+
 	</div>
 
 	<!-- Main Content -->
 	<div class="flex flex-col gap-8">
 		<ProfileInfoDesktopSkeleton />
+		<AnalyticsDashboardSkeleton />
 		<TopPlaysSkeleton />
 		<RecentPlaysSkeleton />
+		<FirstPlacesSkeleton />
 	</div>
 </div>
 
@@ -35,6 +40,8 @@
 				tablet-lg:gap-6 tablet-lg:p-6"
 >
 	<ProfileInfoMobileSkeleton />
+	<AnalyticsDashboardSkeleton />
 	<TopPlaysSkeleton />
 	<RecentPlaysSkeleton />
+	<FirstPlacesSkeleton />
 </div>

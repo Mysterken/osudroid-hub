@@ -14,14 +14,18 @@
 	import { formatRelativeTime } from '$lib/utils/time';
 	import { tooltip } from '$lib/actions/tooltip';
 	import TimelineChart from '$lib/components/users/analytics/TimelineChart.svelte';
-	import type { ApiPlay } from '$lib/models/play';
+	import type { Play } from '$lib/models/play';
 	import { getColorFromRank } from '$lib/utils/colors';
 
 	let {
 		scanner,
 		totalPlayCount = 0,
 		top50Plays = []
-	}: { scanner: PlayerAnalyticsScanner; totalPlayCount?: number; top50Plays?: ApiPlay[] } = $props();
+	}: {
+		scanner: PlayerAnalyticsScanner;
+		totalPlayCount?: number;
+		top50Plays?: Play[];
+	} = $props();
 
 	let open = $state(false);
 

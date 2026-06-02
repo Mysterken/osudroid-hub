@@ -4,7 +4,7 @@
 	import { convertTitleToBeatmapMetadata } from '$lib/utils/playUtils';
 	import type { BeatmapScore } from '$lib/models/beatmapScore';
 	import { playUtils } from '$lib/utils/playUtils';
-	import type { ApiPlay } from '$lib/models/play';
+	import type { ApiPlay, Play } from '$lib/models/play';
 
 	const API_BASE_URL = 'https://new.osudroid.moe/api2/frontend';
 	const DB_NAME = 'osudroid_hub_analytics';
@@ -210,7 +210,7 @@
 			}
 		}
 
-		async start(forceRestart = false, mode: ScanMode = this.mode, top50Plays: ApiPlay[] = []) {
+		async start(forceRestart = false, mode: ScanMode = this.mode, top50Plays: Play[] = []) {
 			if (['scraping_profile', 'scanning_firsts', 'rate_limited'].includes(this.status)) return;
 
 			if (forceRestart || this.status === 'done' || this.status === 'failed') {

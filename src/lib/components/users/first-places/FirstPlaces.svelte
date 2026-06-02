@@ -205,7 +205,7 @@
 								</div>
 							</div>
 
-							<div class="text-right shrink-0 flex flex-col items-end min-w-max pl-2 gap-1">
+							<div class="text-right shrink-0 flex flex-col items-end min-w-max gap-1">
 								<p class="text-pink-400 font-bold text-sm phone-sm:text-base leading-none">
 									{fp.MapPP && fp.MapPP > 0 ? `${Math.round(fp.MapPP)}pp` : 'Unranked'}
 								</p>
