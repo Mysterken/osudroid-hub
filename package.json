@@ -55,7 +55,6 @@
 		"tailwindcss": "^4.3.0"
 	},
 	"resolutions": {
-		"ip-address": "^10.1.1",
-		"postcss-selector-parser": "^6.1.2"
+		"ip-address": "^10.2.0"
 	}
 }
