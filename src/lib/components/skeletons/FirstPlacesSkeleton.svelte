@@ -20,7 +20,7 @@
 		</div>
 	</div>
 
-	<div class="flex flex-col gap-1 phone-sm:gap-1.5 min-h-[150px] justify-center">
+	<div class="flex flex-col gap-1 phone-sm:gap-1.5 justify-center">
 		<div
 			class="placeholder animate-pulse w-full h-[180px] rounded-lg bg-[#1E1E1E] border border-[#3C3C3C]/50"
 		></div>

@@ -158,7 +158,7 @@
 		</div>
 	{/if}
 
-	<div class="flex flex-col gap-1 phone-sm:gap-1.5 min-h-[150px] justify-center">
+	<div class="flex flex-col gap-1 phone-sm:gap-1.5 justify-center">
 		{#if scanner.stats.firstPlaces.length > 0}
 			{#if sortedFirstPlaces.length === 0}
 				<div
