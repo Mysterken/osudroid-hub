@@ -2,7 +2,7 @@
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import ContentLayout from '$lib/components/layouts/ContentLayout.svelte';
 	import Footer from '$lib/components/layouts/Footer.svelte';
-	import { FileTextIcon } from 'lucide-svelte';
+	import { FileTextIcon } from '@lucide/svelte';
 
 	// @ts-expect-error - md file
 	import ChangelogContent from '../../../CHANGELOG.md';
@@ -36,7 +36,7 @@
 
 <Footer />
 
-<style>
+<style lang="postcss">
 	@reference "../../app.css";
 
 	:global(.changelog-prose h1) {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { TrophyIcon } from 'lucide-svelte';
+	import { TrophyIcon } from '@lucide/svelte';
 </script>
 
 <ContentCard

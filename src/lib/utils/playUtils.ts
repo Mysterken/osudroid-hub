@@ -1,4 +1,5 @@
 import type { Play } from '$lib/models/play';
+import type { BeatmapScore } from '$lib/models/beatmapScore';
 
 /**
  * Function to calculate raw PP
@@ -14,7 +15,7 @@ function calculateRawPP(pp: number | null, index: number): number {
  * Matches values for date, score, mods, combo, and accuracy.
  */
 function convertStringIntoPlayDetails(text: string) {
-	const dateMatch = text.match(/\d{4}-\d{2}-\d{2} (\d|:)+/);
+	const dateMatch = text.match(/\d{4}-\d{2}-\d{2} ([\d:])+/);
 	const scoreMatch = text.match(/(?<=score: )([\d,]+)/);
 	const longModsMatch = text.match(/(?<=mod: )([\w., ]+)/);
 	const comboMatch = text.match(/(?<=combo: )(\d+)/);
@@ -88,18 +89,28 @@ function convertAliasToLongModName(alias: string): string {
 }
 
 /**
- * Converts a beatmap title string into structured metadata.
+ * Parses a beatmap filename into its metadata components.
  *
- * Example input:
- * "EGOIST - Ame, Kimi o Tsurete(Speed up ver.) (xAsuna) [Pedri]"
+ * Extracts artist, title, mapper, and difficulty from a beatmap filename
+ * by parsing its standardized format: "Artist - Title (Mapper) [Difficulty]".
+ * Handles edge cases like underscores replacing spaces and .osu extensions.
  *
- * Expected output:
- * {
- *   songArtist: "EGOIST",
- *   songTitle: "Ame, Kimi o Tsurete(Speed up ver.)",
- *   mapper: "xAsuna",
- *   difficulty: "Pedri"
- * }
+ * @param title - The beatmap filename to parse
+ * @returns An object containing parsed metadata
+ * @returns {string} songArtist - The artist/creator of the song
+ * @returns {string} songTitle - The title of the song
+ * @returns {string} mapper - The username of the beatmap creator
+ * @returns {string} difficulty - The difficulty name/version of the beatmap
+ *
+ * @example
+ * // Standard format
+ * convertTitleToBeatmapMetadata("EGOIST - Ame, Kimi o Tsurete(Speed up ver.) (xAsuna) [Pedri]")
+ * // Returns: { songArtist: "EGOIST", songTitle: "Ame, Kimi o Tsurete(Speed up ver.)", mapper: "xAsuna", difficulty: "Pedri" }
+ *
+ * @example
+ * // With .osu extension
+ * convertTitleToBeatmapMetadata("Artist - Song (Mapper) [Diff].osu")
+ * // Returns: { songArtist: "Artist", songTitle: "Song", mapper: "Mapper", difficulty: "Diff" }
  */
 export function convertTitleToBeatmapMetadata(title: string): {
 	songArtist: string;
@@ -107,55 +118,49 @@ export function convertTitleToBeatmapMetadata(title: string): {
 	mapper: string;
 	difficulty: string;
 } {
-	// Remove .osu from the title at the end
-	title = title.replace(/\.osu$/, '');
-
-	// Helper function to escape regex special characters
-	function escapeRegExp(str: string): string {
-		return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	}
-
+	// Remove .osu file extension and trim whitespace
+	let current = title.replace(/\.osu$/, '').trim();
 	let songArtist = '';
-	const songArtistMatch = title.match(/^(.*?) - /);
-	if (songArtistMatch) {
-		songArtist = songArtistMatch[1];
-		// Remove the matched artist portion from the title
-		title = title.replace(new RegExp(escapeRegExp(songArtistMatch[0]), 'g'), '');
-	}
-
-	let difficulty = '';
-	const strippedTitleMatch = title.match(/.*?\) (?=\[)/);
-	if (strippedTitleMatch) {
-		const strippedTitle = strippedTitleMatch[0];
-		// Remove the strippedTitle from the title to get difficulty part
-		difficulty = title.replace(new RegExp(escapeRegExp(strippedTitle), 'g'), '');
-		title = title.replace(new RegExp(escapeRegExp(difficulty), 'g'), '');
-	}
-
-	let songTitle = '';
-	const songTitleMatch = title.match(/.*(?= \()/);
-	if (songTitleMatch) {
-		songTitle = songTitleMatch[0];
-		title = title.replace(new RegExp(escapeRegExp(songTitle), 'g'), '');
-	}
-
 	let mapper = '';
-	const mapperMatch = title.match(/(?<= \().*(?=\))/);
-	if (mapperMatch) {
-		mapper = mapperMatch[0];
+	let difficulty = '';
+
+	// Extract difficulty from the rightmost bracket pair: [Difficulty]
+	const diffMatch = current.match(/\[([^\]]*)][\s_]*$/);
+	if (diffMatch?.index !== undefined) {
+		difficulty = diffMatch[1];
+		// Remove the difficulty part from current string
+		current = current.substring(0, diffMatch.index).replace(/[\s_]+$/, '');
 	}
 
-	// Remove surrounding brackets from difficulty (e.g., "[Pedri]" -> "Pedri")
-	if (difficulty.startsWith('[') && difficulty.endsWith(']')) {
-		difficulty = difficulty.substring(1, difficulty.length - 1);
+	// Extract mapper from the rightmost parentheses: (Mapper)
+	const mapperMatch = current.match(/\(([^)]*)\)[\s_]*$/);
+	if (mapperMatch?.index !== undefined) {
+		mapper = mapperMatch[1];
+		// Remove the mapper part from current string
+		current = current.substring(0, mapperMatch.index).replace(/[\s_]+$/, '');
 	}
 
-	return {
-		songArtist,
-		songTitle,
-		mapper,
-		difficulty
-	};
+	// Extract artist and title by splitting on the separator: " - " or "_-_"
+	const separatorMatch = current.match(/([\s_]+-[\s_]+)/);
+	let songTitle: string;
+	if (separatorMatch?.index !== undefined) {
+		// Split on the separator found
+		songArtist = current.substring(0, separatorMatch.index).trim();
+		songTitle = current.substring(separatorMatch.index + separatorMatch[0].length).trim();
+
+		// replace underscores with spaces in all fields (e.g., "Artist_-_Title")
+		if (separatorMatch[0] === '_-_') {
+			songArtist = songArtist.replace(/_/g, ' ');
+			songTitle = songTitle.replace(/_/g, ' ');
+			mapper = mapper.replace(/_/g, ' ');
+			difficulty = difficulty.replace(/_/g, ' ');
+		}
+	} else {
+		// No separator found; treat entire remaining string as title
+		songTitle = current;
+	}
+
+	return { songArtist, songTitle, mapper, difficulty };
 }
 
 function formatLength(length?: number): string {
@@ -167,21 +172,86 @@ function formatLength(length?: number): string {
 }
 
 /**
- * Calculates the simulated performance points (PP) of a set of plays.
- * @param plays
+ * Calculates the official osu! total PP from an array of unique PP values.
+ * Applies the weight formula and adds Bonus PP.
+ * @param uniquePPs An array containing the highest PP value per beatmap.
+ * @param totalScoreCount Optional: The player's total ranked score count. Defaults to the array length.
  */
-function getSimulatedPerformancePoints(plays: Play[]): number {
-	return plays.reduce((total, play, index) => {
-		return total + calculateRawPP(play.MapPP, index + 1);
+function calculateTotalPP(uniquePPs: number[], totalScoreCount?: number): number {
+	if (!uniquePPs || uniquePPs.length === 0) return 0;
+
+	// Sort Strictly Descending
+	const sortedPP = [...uniquePPs].sort((a, b) => b - a);
+
+	// Calculate Weighted Sum (p * 0.95^(n-1))
+	const weightedPP = sortedPP.reduce((total, pp, index) => {
+		return total + calculateRawPP(pp, index + 1);
 	}, 0);
+
+	// Calculate Bonus PP
+	const N = totalScoreCount || sortedPP.length;
+	const clampedN = Math.min(N, 1000);
+	const bonusPP = 416.6667 * (1 - Math.pow(0.9994, clampedN));
+
+	return weightedPP + bonusPP;
+}
+
+/**
+ * Calculates the simulated performance points (PP) of a set of plays.
+ * Matches the official osu! mathematical algorithm.
+ * @param plays The array of Play models.
+ * @param totalScoreCount Optional: The player's total ranked score count.
+ */
+function getSimulatedPerformancePoints(plays: Play[], totalScoreCount?: number): number {
+	if (!plays || plays.length === 0) return 0;
+
+	const uniquePlaysMap = new Map<string, number>();
+
+	for (const play of plays) {
+		if (!play.Hash || play.MapPP == null) continue;
+
+		const mapId = play.Hash;
+		const currentBest = uniquePlaysMap.get(mapId) || 0;
+
+		if (play.MapPP > currentBest) {
+			uniquePlaysMap.set(mapId, play.MapPP);
+		}
+	}
+
+	return calculateTotalPP(Array.from(uniquePlaysMap.values()), totalScoreCount);
+}
+
+/**
+ * Parses a mod array into a clean array of strings.
+ * Example: [{ acronym: 'HD' }, { acronym: 'DT', settings: { rateMultiplier: 1.5 } }]
+ * Returns: ['HD', 'DT', 'x1.5']
+ */
+export function parseModsArray(mods: BeatmapScore['mods']): string[] {
+	if (!mods || !Array.isArray(mods) || mods.length === 0) return ['NM'];
+
+	const parsedMods: string[] = [];
+	const multiplierMods: string[] = [];
+
+	for (const mod of mods) {
+		parsedMods.push(mod.acronym);
+
+		// Safely handle custom speed multipliers
+		if (mod.settings && typeof mod.settings.rateMultiplier === 'number') {
+			multiplierMods.push(`x${mod.settings.rateMultiplier}`);
+		}
+	}
+
+	return [...parsedMods, ...multiplierMods];
 }
 
 export const playUtils = {
 	calculateRawPP,
+	calculateTotalPP,
 	convertStringIntoPlayDetails,
 	convertLongModNameToAlias,
 	convertAliasToLongModName,
 	convertTitleToBeatmapMetadata,
 	formatLength,
-	getSimulatedPerformancePoints
+	getSimulatedPerformancePoints,
+	parseModsArray
 };

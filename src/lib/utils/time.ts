@@ -42,3 +42,19 @@ export function timeAgo(dateString: string): string {
 
 	return 'just now';
 }
+
+export function formatExactTime(timestamp: number): string {
+	return new Date(timestamp * 1000).toLocaleString();
+}
+
+export function formatRelativeTime(timestamp: number): string {
+	const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+	const daysDiff = Math.round((timestamp * 1000 - Date.now()) / (1000 * 60 * 60 * 24));
+
+	if (Math.abs(daysDiff) < 30) return rtf.format(daysDiff, 'day');
+
+	const monthsDiff = Math.round(daysDiff / 30);
+	if (Math.abs(monthsDiff) < 12) return rtf.format(monthsDiff, 'month');
+
+	return rtf.format(Math.round(monthsDiff / 12), 'year');
+}

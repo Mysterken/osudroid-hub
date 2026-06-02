@@ -2,7 +2,7 @@
 	import defaultAvatarImg from '$lib/assets/default/avatar.webp';
 	import { tooltip } from '$lib/actions/tooltip';
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { timeAgo } from '$lib/utils/timeago';
+	import { timeAgo } from '$lib/utils/time';
 	import { getCountryName } from '$lib/utils/countries';
 
 	let {

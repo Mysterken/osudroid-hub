@@ -8,7 +8,7 @@
 </script>
 
 <script lang="ts" generics="TRow">
-	import { LoaderCircle } from 'lucide-svelte';
+	import { LoaderCircle } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 	import LeaderboardPagination from './LeaderboardPagination.svelte';
 

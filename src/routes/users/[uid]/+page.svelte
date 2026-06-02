@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { ApiPlayer, MergedPlayer, ScraperPlayer } from '$lib/models/player';
 	import ContentLayout from '$lib/components/layouts/ContentLayout.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
@@ -20,11 +19,16 @@
 	import type { PageProps } from './$types';
 	import { getUserField } from '$lib/utils/user';
 	import { playUtils } from '$lib/utils/playUtils';
+	import AnalyticsDashboard from '$lib/components/users/analytics/AnalyticsDashboard.svelte';
+	import { page } from '$app/state';
+	import { PlayerAnalyticsScanner } from '$lib/stores/analyticsScanner.svelte';
+	import FirstPlaces from '$lib/components/users/first-places/FirstPlaces.svelte';
 
 	let { data }: PageProps = $props();
 
 	let user = $derived<ApiPlayer | ScraperPlayer | MergedPlayer | null>(data?.user);
 
+	let userId = $derived(page.params.uid);
 	let globalRank = $derived(getUserField(data?.user, 'GlobalRank', 0)) as number;
 	let countryRank = $derived(getUserField(data?.user, 'CountryRank', 0)) as number;
 	let scoreRank = $derived(getUserField(data?.user, 'ScoreRank', 0)) as number;
@@ -44,6 +48,8 @@
 	let selectedBeatmap: BeatmapExtended | null | undefined = $state();
 	let selectedPlay: Play | null = $state(null);
 	let dialog: HTMLDialogElement | undefined = $state();
+
+	let scanner: PlayerAnalyticsScanner | null = $state(null);
 
 	async function fetchUser(
 		userId: string
@@ -138,50 +144,69 @@
 		return description;
 	}
 
-	onMount(async () => {
-		if (user) {
-			return;
+	$effect(() => {
+		async function loadUser() {
+			if (userId && user?.UserId?.toString() === userId) return;
+
+			isLoading = true;
+
+			const loadedUser = await fetchUser(userId ?? '').catch(() => null);
+
+			if (loadedUser?.Source === 'merged') {
+				({
+					GlobalRank: globalRank,
+					CountryRank: countryRank,
+					Registered: registered,
+					LastLogin: lastLogin,
+					ScoreRank: scoreRank,
+					PPRank: ppRank
+				} = loadedUser);
+			} else if (loadedUser?.Source === 'api') {
+				({
+					GlobalRank: globalRank,
+					CountryRank: countryRank,
+					Registered: registered,
+					LastLogin: lastLogin
+				} = loadedUser);
+			} else if (loadedUser?.Source === 'scraper') {
+				({ ScoreRank: scoreRank, PPRank: ppRank } = loadedUser);
+			}
+
+			user = loadedUser;
+
+			if (user?.Top50Plays) {
+				simulatedPP = playUtils.getSimulatedPerformancePoints(
+					user.Top50Plays,
+					user.OverallPlaycount
+				);
+
+				beatmaps.clear();
+				await fetchBeatmapsInRange(user.Top50Plays, 0, 5);
+				fetchBeatmapsInRange(user.Top50Plays, 5, 25).then((r) => void r);
+			}
+
+			isLoading = false;
 		}
 
-		const userId = window.location.pathname.split('/').pop() || '';
-		user = await fetchUser(userId);
-
-		if (user?.Source === 'merged') {
-			({
-				GlobalRank: globalRank,
-				CountryRank: countryRank,
-				Registered: registered,
-				LastLogin: lastLogin,
-				ScoreRank: scoreRank,
-				PPRank: ppRank
-			} = user);
-		} else if (user?.Source === 'api') {
-			({
-				GlobalRank: globalRank,
-				CountryRank: countryRank,
-				Registered: registered,
-				LastLogin: lastLogin
-			} = user);
-		} else if (user?.Source === 'scraper') {
-			({ ScoreRank: scoreRank, PPRank: ppRank } = user);
-		} else {
-			user = null;
-		}
-
-		if (user?.Top50Plays) {
-			simulatedPP = playUtils.getSimulatedPerformancePoints(user.Top50Plays);
-
-			await fetchBeatmapsInRange(user.Top50Plays, 0, 5);
-			fetchBeatmapsInRange(user.Top50Plays, 5, 25);
-		}
-
-		isLoading = false;
+		loadUser();
 	});
 
 	$effect(() => {
 		if (topPlaysToShow === 25 && user?.Top50Plays) {
 			fetchBeatmapsInRange(user.Top50Plays, 25, 50);
 		}
+	});
+
+	$effect(() => {
+		if (user?.UserId) {
+			if (scanner && scanner.uid !== user.UserId) {
+				scanner.stop();
+				scanner = new PlayerAnalyticsScanner(user.UserId);
+			} else if (!scanner) {
+				scanner = new PlayerAnalyticsScanner(user.UserId);
+			}
+		}
+		return () => scanner?.stop();
 	});
 </script>
 
@@ -239,6 +264,13 @@
 					username={user.Username}
 					country={user.Region}
 				/>
+				{#if scanner}
+					<AnalyticsDashboard
+						{scanner}
+						totalPlayCount={user.OverallPlaycount}
+						top50Plays={user.Top50Plays}
+					/>
+				{/if}
 				<TopPlays
 					topPlays={user.Top50Plays}
 					bind:itemsToShow={topPlaysToShow}
@@ -250,6 +282,9 @@
 					bind:itemsToShow={recentPlaysToShow}
 					{openModal}
 				/>
+				{#if scanner}
+					<FirstPlaces {scanner} {beatmaps} {openModal} />
+				{/if}
 			</div>
 		</div>
 
@@ -280,6 +315,13 @@
 				{registered}
 				{lastLogin}
 			/>
+			{#if scanner}
+				<AnalyticsDashboard
+					{scanner}
+					totalPlayCount={user.OverallPlaycount}
+					top50Plays={user.Top50Plays}
+				/>
+			{/if}
 			<TopPlays
 				topPlays={user.Top50Plays}
 				bind:itemsToShow={topPlaysToShow}
@@ -291,6 +333,9 @@
 				bind:itemsToShow={recentPlaysToShow}
 				{openModal}
 			/>
+			{#if scanner}
+				<FirstPlaces {scanner} {beatmaps} {openModal} />
+			{/if}
 		</div>
 	{:else}
 		<UserNotFound />

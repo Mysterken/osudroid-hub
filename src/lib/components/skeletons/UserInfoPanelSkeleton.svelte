@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { InfoIcon } from 'lucide-svelte';
+	import { InfoIcon } from '@lucide/svelte';
 </script>
 
 <ContentCard sx="!p-2.5 flex flex-col gap-2.5">

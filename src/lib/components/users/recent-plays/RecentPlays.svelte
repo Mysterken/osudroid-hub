@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { Disc3Icon } from 'lucide-svelte';
+	import { Disc3Icon } from '@lucide/svelte';
 	import RecentPlayCardSmall from '$lib/components/users/recent-plays/RecentPlayCardSmall.svelte';
 	import RecentPlayCardLarge from '$lib/components/users/recent-plays/RecentPlayCardLarge.svelte';
 	import type { ApiPlay, Play, ScraperPlay } from '$lib/models/play.js';

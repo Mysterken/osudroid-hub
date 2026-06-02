@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { ChartPieIcon } from 'lucide-svelte';
+	import { ChartPieIcon } from '@lucide/svelte';
 
 	const stats = [
 		{ name: 'Performance Points', width: 'w-12', id: 'pp' },

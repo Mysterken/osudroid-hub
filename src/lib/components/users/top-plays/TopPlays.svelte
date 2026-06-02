@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentCard from '$lib/components/layouts/ContentCard.svelte';
-	import { TrophyIcon } from 'lucide-svelte';
+	import { TrophyIcon } from '@lucide/svelte';
 	import TopPlayCardSmall from '$lib/components/users/top-plays/TopPlayCardSmall.svelte';
 	import TopPlayCardLarge from '$lib/components/users/top-plays/TopPlayCardLarge.svelte';
 	import type { MergedPlay, Play } from '$lib/models/play';
