@@ -93,11 +93,26 @@
 	});
 
 	// Derived Top Stats
-	let topMods = $derived(
-		Object.entries(scanner.stats.mods)
+	let topMods = $derived.by(() => {
+		const merged: Record<string, { count: number; avgPp: number }> = {};
+
+		for (const [mod, { count, avgPp }] of Object.entries(scanner.stats.mods)) {
+			const clean = mod.replace(/RV6/gi, '').replace(/^[,\s]+|[,\s]+$/g, '');
+			const key = !clean || clean === 'None' ? 'NM' : clean;
+
+			const curr = merged[key] || { count: 0, avgPp: 0 };
+			const totalCount = curr.count + count;
+
+			merged[key] = {
+				count: totalCount,
+				avgPp: totalCount ? (curr.avgPp * curr.count + avgPp * count) / totalCount : 0
+			};
+		}
+
+		return Object.entries(merged)
 			.sort(([, a], [, b]) => b.count - a.count)
-			.slice(0, 5)
-	);
+			.slice(0, 5);
+	});
 
 	let topMappers = $derived(
 		Object.entries(scanner.stats.mappers)
@@ -105,11 +120,18 @@
 			.slice(0, 5)
 	);
 
-	let topArtists = $derived(
-		Object.entries(scanner.stats.artists)
+	let topArtists = $derived.by(() => {
+		const counts: Record<string, number> = {};
+
+		for (let [artist, count] of Object.entries(scanner.stats.artists)) {
+			const name = ['V.A.', 'V.A', 'Various Artists'].includes(artist) ? 'Various Artists' : artist;
+			counts[name] = (counts[name] || 0) + count;
+		}
+
+		return Object.entries(counts)
 			.sort(([, a], [, b]) => b - a)
-			.slice(0, 5)
-	);
+			.slice(0, 5);
+	});
 
 	let rankedFirstsCount = $derived(
 		scanner.stats.firstPlaces.filter((fp) => Number(fp.MapPP) > 0).length
