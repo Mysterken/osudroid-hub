@@ -1,12 +1,6 @@
 import { Medal } from '@lucide/svelte';
 import type { Component } from 'svelte';
 
-export const AVATAR_BASE_URL = 'https://osudroid.moe/user/avatar?id=';
-
-export function getPlayerAvatarUrl(userId: number): string {
-	return `${AVATAR_BASE_URL}${userId}`;
-}
-
 export function getRankColor(rank: number): string {
 	if (rank === 1) return 'text-yellow-400';
 	if (rank === 2) return 'text-gray-300';

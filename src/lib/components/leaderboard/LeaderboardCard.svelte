@@ -1,13 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import defaultAvatarImg from '$lib/assets/default/avatar.webp';
-	import {
-		formatNumber,
-		getPlayerAvatarUrl,
-		getRankColor,
-		getRankIcon
-	} from '$lib/utils/leaderboard';
+	import { formatNumber, getRankColor, getRankIcon } from '$lib/utils/leaderboard';
 	import type { Snippet } from 'svelte';
+	import { getPlayerAvatarUrl } from '$lib/utils/user';
 
 	interface Props {
 		userId: number;
@@ -41,11 +36,6 @@
 	function handleAvatarLoad() {
 		isAvatarLoading = false;
 	}
-
-	function handleAvatarError(event: Event) {
-		isAvatarLoading = false;
-		(event.target as HTMLImageElement).src = defaultAvatarImg;
-	}
 </script>
 
 <a
@@ -71,7 +61,6 @@
 					? 'opacity-0'
 					: 'opacity-100'} transition-opacity duration-300"
 				onload={handleAvatarLoad}
-				onerror={handleAvatarError}
 			/>
 		</div>
 

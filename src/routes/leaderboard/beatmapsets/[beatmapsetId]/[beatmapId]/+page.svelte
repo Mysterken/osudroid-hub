@@ -15,18 +15,13 @@
 	import { goto } from '$app/navigation';
 	import type { BeatmapExtended, Beatmapset } from '$lib/models/osuApi/beatmap';
 	import type { BeatmapScore } from '$lib/models/beatmapScore';
-	import {
-		formatNumber,
-		getPlayerAvatarUrl,
-		getRankColor,
-		getRankIcon
-	} from '$lib/utils/leaderboard';
+	import { formatNumber, getRankColor, getRankIcon } from '$lib/utils/leaderboard';
 	import { playUtils, convertTitleToBeatmapMetadata } from '$lib/utils/playUtils';
-	import defaultAvatarImg from '$lib/assets/default/avatar.webp';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { fetchWithLocalCache } from '$lib/utils/fetchWithLocalCache';
 	import { formatExactTime, formatRelativeTime } from '$lib/utils/time';
 	import BeatmapHeader from '$lib/components/leaderboard/BeatmapHeader.svelte';
+	import { getPlayerAvatarUrl } from '$lib/utils/user';
 
 	const CACHE_TTL_1H = 60 * 60 * 1000;
 	const SCORES_PER_PAGE = 100;
@@ -310,7 +305,7 @@
 		});
 	}
 
-	// --- Synchronization Effect ---
+	// Synchronization Effect
 
 	$effect(() => {
 		const currentSetId = beatmapsetId;
@@ -445,12 +440,19 @@
 							href={resolve(`/users/${score.uid}`)}
 							class="flex items-center gap-2 hover:opacity-80 transition-opacity"
 						>
-							<img
-								src={getPlayerAvatarUrl(score.uid)}
-								alt={score.username}
-								class="size-6 rounded-full bg-gray-700"
-								onerror={(e) => ((e.target as HTMLImageElement).src = defaultAvatarImg)}
-							/>
+							<div class="relative size-6 shrink-0 rounded-full overflow-hidden bg-gray-800">
+								<div class="absolute inset-0 animate-pulse bg-gray-700"></div>
+								<img
+									src={getPlayerAvatarUrl(score.uid)}
+									alt={score.username}
+									class="relative z-10 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+									onload={(e) => {
+										const target = e.target as HTMLImageElement;
+										target.classList.remove('opacity-0');
+										target.previousElementSibling?.remove();
+									}}
+								/>
+							</div>
 							<span class="text-white font-medium hover:underline">{score.username}</span>
 						</a>
 					</td>
@@ -520,12 +522,19 @@
 							href={resolve(`/users/${score.uid}`)}
 							class="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity"
 						>
-							<img
-								src={getPlayerAvatarUrl(score.uid)}
-								alt={score.username}
-								class="size-8 rounded-full bg-gray-700 shrink-0"
-								onerror={(e) => ((e.target as HTMLImageElement).src = defaultAvatarImg)}
-							/>
+							<div class="relative size-8 shrink-0 rounded-full overflow-hidden bg-gray-800">
+								<div class="absolute inset-0 animate-pulse bg-gray-700"></div>
+								<img
+									src={getPlayerAvatarUrl(score.uid)}
+									alt={score.username}
+									class="relative z-10 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+									onload={(e) => {
+										const target = e.target as HTMLImageElement;
+										target.classList.remove('opacity-0');
+										target.previousElementSibling?.remove();
+									}}
+								/>
+							</div>
 							<span class="text-white font-medium text-sm truncate">{score.username}</span>
 						</a>
 						<div class="text-right shrink-0">

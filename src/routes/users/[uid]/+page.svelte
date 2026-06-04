@@ -259,11 +259,7 @@
 
 			<!-- Main Content -->
 			<div class="flex flex-col gap-8">
-				<ProfileInfoDesktop
-					avatarLink="https://osudroid.moe/user/avatar/{user.UserId}.png"
-					username={user.Username}
-					country={user.Region}
-				/>
+				<ProfileInfoDesktop id={user.UserId} username={user.Username} country={user.Region} />
 				{#if scanner}
 					<AnalyticsDashboard
 						{scanner}
@@ -299,10 +295,10 @@
 				tablet-lg:gap-6 tablet-lg:p-6"
 		>
 			<ProfileInfoMobile
+				id={user.UserId}
 				source={user.Source}
 				username={user.Username}
 				country={user.Region}
-				avatarLink="https://osudroid.moe/user/avatar/{user.UserId}.png"
 				globalRanking={globalRank}
 				countryRanking={countryRank}
 				scoreRanking={scoreRank}

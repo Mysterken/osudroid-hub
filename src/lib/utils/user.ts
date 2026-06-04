@@ -2,6 +2,12 @@ import type { ApiPlayer, MergedPlayer, ScraperPlayer } from '$lib/models/player'
 
 type User = ApiPlayer | ScraperPlayer | MergedPlayer;
 
+export const AVATAR_BASE_URL = 'https://osudroid.moe/user/avatar?id=';
+
+export function getPlayerAvatarUrl(userId: number | string): string {
+	return `${AVATAR_BASE_URL}${userId}`;
+}
+
 export function getUserField<T extends keyof (ApiPlayer & ScraperPlayer & MergedPlayer)>(
 	user: User | null,
 	field: T,
